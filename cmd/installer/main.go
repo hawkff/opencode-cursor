@@ -64,7 +64,6 @@ func runPreInstallChecks() []checkResult {
 	// Check cursor-agent
 	if commandExists("cursor-agent") {
 		checks = append(checks, checkResult{name: "cursor-agent", passed: true, message: "installed"})
-		// Check if logged in
 		if cursorAgentLoggedIn() {
 			checks = append(checks, checkResult{name: "cursor-agent login", passed: true, message: "logged in"})
 		} else {
@@ -72,6 +71,20 @@ func runPreInstallChecks() []checkResult {
 		}
 	} else {
 		checks = append(checks, checkResult{name: "cursor-agent", passed: false, message: "not found - install with: curl -fsS https://cursor.com/install | bash"})
+	}
+
+	// Check OpenCode installation
+	ocInfo := detectOpenCodeInstall()
+	if ocInfo.Installed {
+		versionInfo := ocInfo.Version
+		if versionInfo == "" {
+			versionInfo = "version unknown"
+		}
+		methodInfo := fmt.Sprintf("%s (%s)", versionInfo, ocInfo.InstallMethod.String())
+		checks = append(checks, checkResult{name: "OpenCode", passed: true, message: methodInfo})
+		checks = append(checks, checkResult{name: "OpenCode binary", passed: true, message: ocInfo.BinaryPath})
+	} else {
+		checks = append(checks, checkResult{name: "OpenCode", passed: false, message: "not found - install with: curl -fsSL https://opencode.ai/install | bash"})
 	}
 
 	// Check OpenCode config directory

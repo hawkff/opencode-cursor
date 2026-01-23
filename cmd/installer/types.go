@@ -16,6 +16,7 @@ type installStep int
 const (
 	stepWelcome installStep = iota
 	stepInstalling
+	stepUninstalling
 	stepComplete
 )
 
@@ -81,6 +82,7 @@ type model struct {
 	pluginDir     string
 	configPath    string
 	existingSetup bool
+	isUninstall   bool
 
 	// Context for cancellation
 	ctx    context.Context

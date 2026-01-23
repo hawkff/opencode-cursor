@@ -2,180 +2,71 @@
 
 A lightweight OpenCode plugin for Cursor Agent integration via stdin (fixes E2BIG errors).
 
-> **⚠️ WIP**: This plugin is currently under development. While the plugin structure is correct and loads without errors, there's an ongoing investigation into a Bun/opencode segfault issue that occurs when the plugin is loaded. The plugin exports are correct and match working plugins, but the root cause of the segfault needs to be identified.
-
 ## Installation
 
-### One-Line Install (Fastest)
+**Quick install**:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/nomadcxx/opencode-cursor/main/install.sh | bash
 ```
 
-### Quick Install (Recommended)
+**Manual install**:
 
 ```bash
 git clone https://github.com/nomadcxx/opencode-cursor.git
 cd opencode-cursor
-./install.sh
-```
-
-The installer will:
-- Check prerequisites (bun, cursor-agent)
-- Build the TypeScript plugin
-- Create symlink to OpenCode plugin directory
-- Update opencode.json with cursor-acp provider
-- Validate the configuration
-
-### Manual Installation
-
-```bash
-# Install dependencies and build
-bun install
-bun run build
-
-# Create plugin directory
+bun install && bun run build
+cd ~/.config/opencode && bun add @agentclientprotocol/sdk@^0.13.1
 mkdir -p ~/.config/opencode/plugin
-
-# Symlink plugin
 ln -s $(pwd)/dist/index.js ~/.config/opencode/plugin/cursor-acp.js
-
-# Add to ~/.config/opencode/opencode.json:
-# {
-#   "provider": {
-#     "cursor-acp": {
-#       "npm": "@ai-sdk/openai-compatible",
-#       "name": "Cursor Agent (ACP stdin)",
-#       "options": {
-#         "baseURL": "http://127.0.0.1:32123/v1"
-#       }
-#     }
-#   }
-# }
 ```
+
+Add to `~/.config/opencode/opencode.json`:
+
+```json
+{
+  "provider": {
+    "cursor-acp": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Cursor Agent (ACP stdin)",
+      "options": {
+        "baseURL": "http://127.0.0.1:32123/v1"
+      }
+    }
+  }
+}
+```
+
+**Note**: The plugin externalizes ACP SDK to avoid Bun's segfault bug with large bundles. ACP SDK is installed to `~/.config/opencode/node_modules/`.
 
 ## Usage
 
-OpenCode will automatically use this provider when configured. Select `cursor-acp/auto` as your model.
+Select `cursor-acp/auto` as your model in OpenCode.
 
 ## Features
 
-- ✅ Passes prompts via stdin (fixes E2BIG)
-- ✅ Full streaming support with proper buffering
-- ✅ Tool calling support
-- ✅ Minimal complexity (~200 lines)
-- ✅ TUI installer with animated terminal art
-- ✅ Pre/post install validation
+- stdin/stdout communication (no E2BIG argument limit errors)
+- Full streaming support
+- Tool calling support
+- ACP protocol (works with OpenCode, Zed, JetBrains, neovim)
+- Session persistence
+- Automatic retry with exponential backoff
 
-## ACP Protocol
+## Why This Approach
 
-This plugin implements **Agent Client Protocol (ACP)** for universal compatibility. It works with:
-
-- ✅ OpenCode
-- ✅ Zed
-- ✅ JetBrains
-- ✅ neovim (via avante.nvim plugin)
-- ✅ marimo notebook
-
-### ACP Features
-
-- Full session management with persistence
-- Mode switching (default, plan)
-- Enhanced tool call metadata (durations, diffs, locations)
-- Proper cancellation semantics
-- Auth method negotiation
-
-### Session Persistence
-
-Sessions are automatically persisted to `~/.opencode/sessions/` and restored on plugin restart. This means:
-
-- Survive crashes
-- Resume interrupted conversations
-- Track session history
-
-### Retry Logic
-
-Recoverable errors (timeout, network, rate limit) are automatically retried with exponential backoff:
-- Attempt 1: 1s delay
-- Attempt 2: 2s delay
-- Attempt 3: 4s delay
-
-Fatal errors (auth, invalid config) fail immediately with clear messages.
-
-## Background
-
-[PR #5095](https://github.com/sst/opencode/pull/5095) by [@rinardmclern](https://github.com/rinardmclern) proposed native ACP (OpenAI Chat Completion Protocol) support for OpenCode. The PR introduced a comprehensive implementation that would have allowed OpenCode to directly communicate with Cursor Agent using the standard OpenAI-compatible API format.
-
-Despite the high quality of the contribution and community interest, the OpenCode maintainers decided not to merge PR #5095. The reasons cited included concerns about maintaining external service integrations and preferring to keep the core plugin system focused.
-
-This plugin exists because of that decision. It provides the same functionality—Cursor Agent integration via stdin/stdout—as a standalone tool that anyone can install and use immediately without waiting for upstream changes.
-
-## Why Other Approaches Don't Work
-
-Several alternative solutions have been attempted to integrate Cursor with OpenCode, but each has fundamental issues:
-
-### opencode-cursor-auth (CLI Arguments)
-This approach passes prompts as CLI arguments to cursor-agent. The problem is that operating systems enforce a hard limit on the total length of command-line arguments (typically 128KB on Linux, 32KB on macOS). When coding conversations grow large, you immediately hit:
-
-```
-E2BIG: argument list too long
-```
-
-This makes it unusable for real-world coding sessions where context grows naturally.
-
-### HTTP Proxy Wrappers
-Some projects tried to run an HTTP server that wraps cursor-agent, then point OpenCode to `http://localhost:PORT/v1`. While this bypasses the argument limit, it introduces unnecessary complexity:
-
-- Requires managing a separate daemon process
-- Adds network latency to every prompt
-- Creates a single point of failure if the proxy crashes
-- Adds memory and CPU overhead for no functional benefit
-- Harder to debug when things go wrong
-
-### Direct OpenAI API Integration
-Others attempted to use Cursor's OpenAI-compatible API endpoint directly. This has issues:
-
-- Requires active internet connection even for local models
-- Subject to rate limits and API changes
-- Sends potentially sensitive code to external servers
-- Doesn't leverage cursor-agent's built-in optimizations
-
-### The stdin/stdout Approach (This Plugin)
-This plugin uses the standard Unix philosophy: pipe data through stdin, read results from stdout. This approach:
-
-- ✅ No argument length limits (stdin has no size constraints)
-- ✅ No network overhead (direct process communication)
-- ✅ No daemon to manage (spawns on-demand)
-- ✅ Minimal complexity (~200 lines of TypeScript)
-- ✅ Full streaming support
-- ✅ Tool calling support
-- ✅ Works offline with local models
-
-## Problem Solved
-
-`opencode-cursor-auth` passes prompts as CLI arguments → causes `E2BIG: argument list too long` errors.
-
-This plugin uses stdin/stdout to bypass argument length limits.
+CLI argument passing fails with E2BIG errors. HTTP proxies add daemon overhead. This plugin uses stdin/stdout for simple, direct communication.
 
 ## Prerequisites
 
-- [Bun](https://bun.sh/) - JavaScript runtime
-- [cursor-agent](https://cursor.com/) - Cursor CLI tool
-- [Go 1.21+](https://golang.org/) - For building installer
+- bun
+- cursor-agent
+- Go 1.21+ (installer)
 
 ## Development
 
 ```bash
-# Install dependencies
 bun install
-
-# Build plugin
-bun run build
-
-# Watch mode
-bun run dev
-
-# Run installer in debug mode
+bun run build  # or bun run dev for watch mode
 ./install.sh --debug
 ```
 

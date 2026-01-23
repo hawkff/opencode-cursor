@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -17,6 +18,7 @@ func (m model) startInstallation() (tea.Model, tea.Cmd) {
 	m.tasks = []installTask{
 		{name: "Check prerequisites", description: "Verifying bun and cursor-agent", execute: checkPrerequisites, status: statusPending},
 		{name: "Build plugin", description: "Running bun install && bun run build", execute: buildPlugin, status: statusPending},
+		{name: "Install ACP SDK", description: "Adding @agentclientprotocol/sdk to opencode", execute: installAcpSdk, status: statusPending},
 		{name: "Create symlink", description: "Linking to OpenCode plugin directory", execute: createSymlink, status: statusPending},
 		{name: "Update config", description: "Adding cursor-acp provider to opencode.json", execute: updateConfig, status: statusPending},
 		{name: "Validate config", description: "Checking JSON syntax", execute: validateConfig, status: statusPending},
@@ -79,6 +81,46 @@ func buildPlugin(m *model) error {
 	info, err := os.Stat(distPath)
 	if err != nil || info.Size() == 0 {
 		return fmt.Errorf("dist/index.js not found or empty after build")
+	}
+
+	return nil
+}
+
+func installAcpSdk(m *model) error {
+	// Get opencode's config directory node_modules path
+	configDir, _ := getConfigDir()
+	opencodeNodeModules := filepath.Join(configDir, "opencode", "node_modules")
+
+	// Check if ACP SDK already exists in opencode's node_modules
+	acpPath := filepath.Join(opencodeNodeModules, "@agentclientprotocol", "sdk")
+	if _, err := os.Stat(acpPath); err == nil {
+		// Already installed
+		return nil
+	}
+
+	// Create package.json in opencode config dir if it doesn't exist
+	opencodeConfigDir := filepath.Join(configDir, "opencode")
+	packageJsonPath := filepath.Join(opencodeConfigDir, "package.json")
+
+	_, err := os.Stat(packageJsonPath)
+	if os.IsNotExist(err) {
+		// Create minimal package.json
+		initialPkg := `{
+  "name": "opencode-config",
+  "dependencies": {
+    "@opencode-ai/plugin": "latest"
+  }
+}`
+		if err := os.WriteFile(packageJsonPath, []byte(initialPkg), 0644); err != nil {
+			return fmt.Errorf("failed to create package.json: %w", err)
+		}
+	}
+
+	// Install ACP SDK to opencode's node_modules using bun
+	installCmd := exec.Command("bun", "add", "@agentclientprotocol/sdk@^0.13.1")
+	installCmd.Dir = opencodeConfigDir
+	if err := runCommand("bun add @agentclientprotocol/sdk", installCmd, m.logFile); err != nil {
+		return fmt.Errorf("failed to install ACP SDK: %w", err)
 	}
 
 	return nil
@@ -194,6 +236,146 @@ func verifyPlugin(m *model) error {
 	cmd = exec.Command("cursor-agent", "--version")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("cursor-agent not responding")
+	}
+
+	return nil
+}
+
+// Uninstall functions
+func (m model) startUninstallation() (tea.Model, tea.Cmd) {
+	m.step = stepUninstalling
+	m.isUninstall = true
+
+	m.tasks = []installTask{
+		{name: "Remove plugin symlink", description: "Removing cursor-acp.js from plugin directory", execute: removeSymlink, status: statusPending},
+		{name: "Remove provider config", description: "Removing cursor-acp from opencode.json", execute: removeProviderConfig, status: statusPending},
+		{name: "Remove old plugin", description: "Removing opencode-cursor-auth if present", execute: removeOldPlugin, status: statusPending},
+		{name: "Validate config", description: "Checking JSON syntax", execute: validateConfigAfterUninstall, status: statusPending},
+	}
+
+	m.currentTaskIndex = 0
+	m.tasks[0].status = statusRunning
+	return m, tea.Batch(m.spinner.Tick, executeTaskCmd(0, &m))
+}
+
+func removeSymlink(m *model) error {
+	symlinkPath := filepath.Join(m.pluginDir, "cursor-acp.js")
+
+	// Check if symlink exists
+	if _, err := os.Lstat(symlinkPath); os.IsNotExist(err) {
+		// Symlink doesn't exist, that's fine - already uninstalled
+		return nil
+	}
+
+	// Remove symlink
+	if err := os.Remove(symlinkPath); err != nil {
+		return fmt.Errorf("failed to remove symlink: %w", err)
+	}
+
+	return nil
+}
+
+func removeProviderConfig(m *model) error {
+	// Read existing config
+	data, err := os.ReadFile(m.configPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Config doesn't exist, nothing to remove
+			return nil
+		}
+		return fmt.Errorf("failed to read config: %w", err)
+	}
+
+	var config map[string]interface{}
+	if err := json.Unmarshal(data, &config); err != nil {
+		return fmt.Errorf("failed to parse config: %w", err)
+	}
+
+	// Remove cursor-acp provider
+	if providers, ok := config["provider"].(map[string]interface{}); ok {
+		if _, exists := providers["cursor-acp"]; exists {
+			delete(providers, "cursor-acp")
+		}
+	}
+
+	// Write config back
+	output, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to serialize config: %w", err)
+	}
+
+	if err := os.WriteFile(m.configPath, output, 0644); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
+func validateConfigAfterUninstall(m *model) error {
+	if err := validateJSON(m.configPath); err != nil {
+		return fmt.Errorf("config validation failed: %w", err)
+	}
+
+	// Verify cursor-acp provider is removed
+	data, _ := os.ReadFile(m.configPath)
+	var config map[string]interface{}
+	json.Unmarshal(data, &config)
+
+	if providers, ok := config["provider"].(map[string]interface{}); ok {
+		if _, exists := providers["cursor-acp"]; exists {
+			return fmt.Errorf("cursor-acp provider still exists in config")
+		}
+	}
+
+	return nil
+}
+
+func removeOldPlugin(m *model) error {
+	configDir, _ := getConfigDir()
+	configPath := filepath.Join(configDir, "opencode", "opencode.json")
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to read config: %w", err)
+	}
+
+	var config map[string]interface{}
+	if err := json.Unmarshal(data, &config); err != nil {
+		return fmt.Errorf("failed to parse config: %w", err)
+	}
+
+	if plugins, ok := config["plugin"].([]interface{}); ok {
+		var newPlugins []interface{}
+		for _, p := range plugins {
+			pluginStr, ok := p.(string)
+			if !ok {
+				continue
+			}
+			if !strings.HasPrefix(pluginStr, "opencode-cursor-auth") {
+				newPlugins = append(newPlugins, pluginStr)
+			}
+		}
+		config["plugin"] = newPlugins
+	}
+
+	output, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to serialize config: %w", err)
+	}
+
+	if err := os.WriteFile(configPath, output, 0644); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	cacheDir := filepath.Join(os.Getenv("HOME"), ".cache", "opencode", "node_modules")
+	oldPluginPath := filepath.Join(cacheDir, "opencode-cursor-auth")
+	if _, err := os.Stat(oldPluginPath); err == nil {
+		if err := os.RemoveAll(oldPluginPath); err != nil {
+			return fmt.Errorf("failed to remove old plugin from cache: %w", err)
+		}
 	}
 
 	return nil

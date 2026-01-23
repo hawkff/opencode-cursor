@@ -70,6 +70,8 @@ func (m model) View() string {
 		mainContent = m.renderWelcome()
 	case stepInstalling:
 		mainContent = m.renderInstalling()
+	case stepUninstalling:
+		mainContent = m.renderInstalling() // Same view for uninstalling
 	case stepComplete:
 		mainContent = m.renderComplete()
 	}
@@ -110,8 +112,11 @@ func (m model) View() string {
 func (m model) getHelpText() string {
 	switch m.step {
 	case stepWelcome:
+		if m.existingSetup {
+			return "Enter: Install  •  u: Uninstall  •  q: Quit"
+		}
 		return "Enter: Install  •  q: Quit"
-	case stepInstalling:
+	case stepInstalling, stepUninstalling:
 		return "Please wait..."
 	case stepComplete:
 		return "Enter: Exit"
@@ -142,23 +147,26 @@ func (m model) renderWelcome() string {
 	b.WriteString("\n")
 
 	if m.existingSetup {
-		b.WriteString(lipgloss.NewStyle().Foreground(WarningColor).Render("⚠ cursor-acp already configured - will reinstall"))
+		b.WriteString(lipgloss.NewStyle().Foreground(WarningColor).Render("⚠ cursor-acp already configured"))
 		b.WriteString("\n\n")
-	}
-
-	// Check if we can proceed
-	canProceed := true
-	for _, check := range m.checks {
-		if !check.passed && !check.warning {
-			canProceed = false
-			break
-		}
-	}
-
-	if canProceed {
-		b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(Primary).Render("Press Enter to install"))
+		b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(Primary).Render("Press Enter to reinstall"))
+		b.WriteString("  •  ")
+		b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(ErrorColor).Render("Press 'u' to uninstall"))
 	} else {
-		b.WriteString(lipgloss.NewStyle().Foreground(ErrorColor).Render("Fix errors above before installing"))
+		// Check if we can proceed
+		canProceed := true
+		for _, check := range m.checks {
+			if !check.passed && !check.warning {
+				canProceed = false
+				break
+			}
+		}
+
+		if canProceed {
+			b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(Primary).Render("Press Enter to install"))
+		} else {
+			b.WriteString(lipgloss.NewStyle().Foreground(ErrorColor).Render("Fix errors above before installing"))
+		}
 	}
 
 	return b.String()
@@ -207,33 +215,44 @@ func (m model) renderComplete() string {
 	}
 
 	if hasCriticalFailure {
+		action := "Installation"
+		if m.isUninstall {
+			action = "Uninstallation"
+		}
 		return lipgloss.NewStyle().Foreground(ErrorColor).Render(
-			"Installation failed.\nCheck errors above.\n\nPress Enter to exit")
+			fmt.Sprintf("%s failed.\nCheck errors above.\n\nPress Enter to exit", action))
 	}
 
 	var b strings.Builder
-	b.WriteString(lipgloss.NewStyle().Foreground(SuccessColor).Bold(true).Render("✓ Installation Complete"))
-	b.WriteString("\n\n")
-
-	b.WriteString("The cursor-acp provider is now available in OpenCode.\n\n")
-
-	b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(Primary).Render("Quick Start"))
-	b.WriteString("\n")
-
-	cmdStyle := lipgloss.NewStyle().Foreground(Secondary)
-	descStyle := lipgloss.NewStyle().Foreground(FgMuted)
-
-	b.WriteString(fmt.Sprintf("  %s  %s\n", cmdStyle.Render("opencode"), descStyle.Render("Start OpenCode")))
-	b.WriteString(fmt.Sprintf("  %s  %s\n\n", cmdStyle.Render("cursor-acp/auto"), descStyle.Render("Use as model name")))
-
-	if !cursorAgentLoggedIn() {
-		b.WriteString(lipgloss.NewStyle().Foreground(WarningColor).Render("⚠ Remember to run: cursor-agent login"))
+	if m.isUninstall {
+		b.WriteString(lipgloss.NewStyle().Foreground(SuccessColor).Bold(true).Render("✓ Uninstallation Complete"))
 		b.WriteString("\n\n")
+		b.WriteString("The cursor-acp plugin has been removed from OpenCode.\n\n")
+	} else {
+		b.WriteString(lipgloss.NewStyle().Foreground(SuccessColor).Bold(true).Render("✓ Installation Complete"))
+		b.WriteString("\n\n")
+		b.WriteString("The cursor-acp provider is now available in OpenCode.\n\n")
 	}
 
-	pathStyle := lipgloss.NewStyle().Foreground(FgMuted).Italic(true)
-	b.WriteString(fmt.Sprintf("Plugin:  %s\n", pathStyle.Render(m.pluginDir+"/cursor-acp.js")))
-	b.WriteString(fmt.Sprintf("Config:  %s\n", pathStyle.Render(m.configPath)))
+	if !m.isUninstall {
+		b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(Primary).Render("Quick Start"))
+		b.WriteString("\n")
+
+		cmdStyle := lipgloss.NewStyle().Foreground(Secondary)
+		descStyle := lipgloss.NewStyle().Foreground(FgMuted)
+
+		b.WriteString(fmt.Sprintf("  %s  %s\n", cmdStyle.Render("opencode"), descStyle.Render("Start OpenCode")))
+		b.WriteString(fmt.Sprintf("  %s  %s\n\n", cmdStyle.Render("cursor-acp/auto"), descStyle.Render("Use as model name")))
+
+		if !cursorAgentLoggedIn() {
+			b.WriteString(lipgloss.NewStyle().Foreground(WarningColor).Render("⚠ Remember to run: cursor-agent login"))
+			b.WriteString("\n\n")
+		}
+
+		pathStyle := lipgloss.NewStyle().Foreground(FgMuted).Italic(true)
+		b.WriteString(fmt.Sprintf("Plugin:  %s\n", pathStyle.Render(m.pluginDir+"/cursor-acp.js")))
+		b.WriteString(fmt.Sprintf("Config:  %s\n", pathStyle.Render(m.configPath)))
+	}
 
 	b.WriteString("\n")
 	b.WriteString(lipgloss.NewStyle().Foreground(FgMuted).Render("Press Enter to exit"))

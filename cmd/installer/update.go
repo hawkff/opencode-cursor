@@ -48,7 +48,7 @@ func (m model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch key {
 	case "ctrl+c":
-		if m.step != stepInstalling {
+		if m.step != stepInstalling && m.step != stepUninstalling {
 			if m.cancel != nil {
 				m.cancel()
 			}
@@ -65,6 +65,9 @@ func (m model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.step {
 	case stepWelcome:
 		return m.handleWelcomeKeys(key)
+	case stepInstalling, stepUninstalling:
+		// Can't quit during install/uninstall
+		return m, nil
 	case stepComplete:
 		return m.handleCompleteKeys(key)
 	}
@@ -75,13 +78,18 @@ func (m model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m model) handleWelcomeKeys(key string) (tea.Model, tea.Cmd) {
 	switch key {
 	case "enter":
-		// Check for blocking errors
+		// Check for blocking errors (only for install)
 		for _, check := range m.checks {
 			if !check.passed && !check.warning {
 				return m, nil // Don't proceed with blocking errors
 			}
 		}
 		return m.startInstallation()
+	case "u":
+		// Uninstall - no prerequisites needed
+		if m.existingSetup {
+			return m.startUninstallation()
+		}
 	}
 	return m, nil
 }
