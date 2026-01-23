@@ -225,3 +225,30 @@ bun build ./src/index.ts --outdir ./dist --target node --external "@agentclientp
 - OpenCode: 1.1.34
 - Plugin bundle: 480KB, 14,469 lines
 - ACP SDK: @agentclientprotocol/sdk@^0.13.1
+
+## Additional Hypothesis: Multiple Installation Methods
+
+**Potential Issue: Different installation methods might load plugins differently**
+
+The user has multiple opencode installations:
+- AUR binary: `/usr/bin/opencode` (opencode-bin 1.1.34-1)
+- Install script: `~/.opencode/bin/opencode` (1.1.34)
+- PATH prioritizes: `~/.opencode/bin/opencode`
+
+**Plugin Loading Locations:**
+- `~/.config/opencode/plugin/` (singular - backwards compat)
+- `~/.config/opencode/plugins/` (plural - recommended)
+- `.opencode/plugins/` (project-level, plural)
+- npm plugins: `~/.cache/opencode/node_modules/`
+
+**Potential Conflicts:**
+1. Different binaries might use different plugin loading mechanisms
+2. Multiple node_modules locations could cause module resolution issues
+3. Plugin directory name confusion (singular vs plural)
+4. AUR vs install script might have different Bun versions or configurations
+
+**Investigation Needed:**
+- Check if AUR binary uses different plugin loading
+- Verify which node_modules location is used for plugin dependencies
+- Test if moving plugin to `plugins/` (plural) helps
+- Check if different installation methods have different Bun runtimes
