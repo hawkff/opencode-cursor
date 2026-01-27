@@ -11,7 +11,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		headerHeight := 7
+		// Calculate header height: 4 lines for ASCII art + 2 for padding
+		headerHeight := 6
 		if m.beams == nil {
 			m.beams = NewBeamsTextEffect(msg.Width, headerHeight, asciiHeader)
 		} else {
@@ -20,13 +21,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tickMsg:
-		if m.beams != nil {
-			m.beams.Update()
+		// Only process animation ticks if not in complete step
+		if m.step != stepComplete {
+			if m.beams != nil {
+				m.beams.Update()
+			}
+			if m.ticker != nil {
+				m.ticker.Update()
+			}
+			return m, tickCmd()
 		}
-		if m.ticker != nil {
-			m.ticker.Update()
-		}
-		return m, tickCmd()
+		// In complete step, don't restart the tick timer
+		return m, nil
 
 	case tea.KeyMsg:
 		return m.handleKeyPress(msg)
@@ -48,6 +54,10 @@ func (m model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch key {
 	case "ctrl+c":
+		if m.cancel != nil {
+			m.cancel()
+		}
+		return m, tea.Quit
 	case "esc":
 		if m.cancel != nil {
 			m.cancel()

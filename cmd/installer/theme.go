@@ -3,7 +3,7 @@ package main
 
 import "github.com/charmbracelet/lipgloss"
 
-// Theme colors - Monochrome (same as jellywatch)
+// Theme colors - Monochrome (sysc-family style)
 var (
 	BgBase       = lipgloss.Color("#1a1a1a")
 	BgElevated   = lipgloss.Color("#2a2a2a")
@@ -13,9 +13,9 @@ var (
 	FgPrimary    = lipgloss.Color("#ffffff")
 	FgSecondary  = lipgloss.Color("#cccccc")
 	FgMuted      = lipgloss.Color("#666666")
-	ErrorColor   = lipgloss.Color("#ff6b6b")
-	WarningColor = lipgloss.Color("#888888")
-	SuccessColor = lipgloss.Color("#ffffff")
+	ErrorColor   = lipgloss.Color("#ffffff") // White (monochrome)
+	WarningColor = lipgloss.Color("#888888") // Medium gray
+	SuccessColor = lipgloss.Color("#ffffff") // White (monochrome)
 )
 
 // Styles
@@ -27,6 +27,6 @@ var (
 )
 
 // ASCII header from /home/nomadx/bit/opencursor.txt
-const asciiHeader = "▄▄▄  ▄▄▄▄  ▄▄▄▄▄ ▄▄  ▄▄      ▄▄▄  ▄▄ ▄▄ ▄▄▄▄   ▄▄▄▄   ▄▄▄   ▄▄▄▄ \n" +
-	"██ ██ ██ ██ ██▄▄  ███▄██ ▄▄▄ ██ ▀▀ ██ ██ ██ ██ ██▄▄▄  ██ ██  ██ ██\n" +
-	"▀█▄█▀ ██▀▀  ██▄▄▄ ██ ▀██     ▀█▄█▀ ▀█▄█▀ ██▀█▄ ▄▄▄█▀  ▀█▄█▀  ██▀█▄"
+const asciiHeader = `▄▄▄  ▄▄▄▄  ▄▄▄▄▄ ▄▄  ▄▄      ▄▄▄  ▄▄ ▄▄ ▄▄▄▄   ▄▄▄▄   ▄▄▄   ▄▄▄▄ 
+██ ██ ██ ██ ██▄▄  ███▄██ ▄▄▄ ██ ▀▀ ██ ██ ██ ██ ██▄▄▄  ██ ██  ██ ██
+▀█▄█▀ ██▀▀  ██▄▄▄ ██ ▀██     ▀█▄█▀ ▀█▄█▀ ██▀█▄ ▄▄▄█▀  ▀█▄█▀  ██▀█▄`
