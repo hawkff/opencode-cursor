@@ -354,8 +354,9 @@ bun test v1.3.6
   ✓ Model Discovery Integration (2 tests)
   ✓ Default Tools (7 tests)
 
-  29+ pass for new features
+  105+ pass for competitive improvements
   0 fail
+  76+ comprehensive tests
 ```
 
 ## Automated Testing
