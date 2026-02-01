@@ -217,11 +217,22 @@ func updateConfig(m *model) error {
 		"sonnet-4.5-thinking":     map[string]interface{}{"name": "Cursor Agent Claude 4.5 Sonnet Thinking"},
 	}
 
-	// Add cursor-acp provider (plugin will handle baseURL via hook)
-	providers["cursor-acp"] = map[string]interface{}{
-		"name":   "Cursor Agent (ACP stdin)",
-		"models": models,
+	// Add cursor-acp provider (merge with existing to preserve user config)
+	existingCursorAcp, _ := providers["cursor-acp"].(map[string]interface{})
+	if existingCursorAcp == nil {
+		existingCursorAcp = make(map[string]interface{})
 	}
+
+	// Only set name if not already present (preserve user customization)
+	if _, hasName := existingCursorAcp["name"]; !hasName {
+		existingCursorAcp["name"] = "Cursor Agent (ACP stdin)"
+	}
+
+	// Always update models list (this is what installer needs to ensure)
+	existingCursorAcp["models"] = models
+
+	// Preserve any other user fields (npm, options, baseURL, etc.)
+	providers["cursor-acp"] = existingCursorAcp
 
 	// Ensure plugin array exists and add opencode-cursor
 	plugins, ok := config["plugin"].([]interface{})
