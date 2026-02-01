@@ -445,7 +445,9 @@ async function ensureCursorProxyServer(workspaceDirectory: string): Promise<stri
  * OpenCode plugin for Cursor Agent
  */
 export const CursorPlugin: Plugin = async ({ $, directory }: PluginInput) => {
+  console.error(`[cursor-acp] Plugin initializing in directory: ${directory}`);
   const proxyBaseURL = await ensureCursorProxyServer(directory);
+  console.error(`[cursor-acp] Proxy server started at: ${proxyBaseURL}`);
 
   return {
     auth: {
@@ -458,13 +460,21 @@ export const CursorPlugin: Plugin = async ({ $, directory }: PluginInput) => {
           label: "Cursor OAuth",
           type: "oauth",
           async authorize() {
-            const { url, instructions, callback } = await startCursorOAuth();
-            return {
-              type: "oauth",
-              url,
-              instructions,
-              callback,
-            };
+            try {
+              console.error("[cursor-acp] Starting OAuth flow...");
+              const { url, instructions, callback } = await startCursorOAuth();
+              console.error(`[cursor-acp] Got URL: ${url}`);
+              return {
+                type: "oauth",
+                url,
+                instructions,
+                method: "auto",
+                callback,
+              };
+            } catch (error) {
+              console.error(`[cursor-acp] OAuth error: ${error}`);
+              throw error;
+            }
           },
         },
       ],

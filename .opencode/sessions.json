@@ -842,5 +842,42 @@
     "cancelled": false,
     "createdAt": 1769919136964,
     "updatedAt": 1769919136964
+  },
+  "session-1769963248924-7wl5x35": {
+    "id": "session-1769963248924-7wl5x35",
+    "cwd": "/tmp",
+    "cancelled": false,
+    "createdAt": 1769963248924,
+    "updatedAt": 1769963248924
+  },
+  "session-1769963248925-cyp6o7i": {
+    "id": "session-1769963248925-cyp6o7i",
+    "cwd": "/tmp",
+    "modeId": "plan",
+    "cancelled": false,
+    "createdAt": 1769963248925,
+    "updatedAt": 1769963248925
+  },
+  "session-1769963248925-qvwnsm2": {
+    "id": "session-1769963248925-qvwnsm2",
+    "cwd": "/tmp",
+    "modeId": "plan",
+    "cancelled": false,
+    "createdAt": 1769963248925,
+    "updatedAt": 1769963248925
+  },
+  "session-1769963248926-gh7tayy": {
+    "id": "session-1769963248926-gh7tayy",
+    "cwd": "/home/nomadx/opencode-cursor",
+    "cancelled": false,
+    "createdAt": 1769963248926,
+    "updatedAt": 1769963248926
+  },
+  "session-1769963248926-ui1iklq": {
+    "id": "session-1769963248926-ui1iklq",
+    "cwd": "/home/nomadx/opencode-cursor",
+    "cancelled": false,
+    "createdAt": 1769963248926,
+    "updatedAt": 1769963248926
   }
 }

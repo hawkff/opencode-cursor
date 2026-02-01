@@ -34,14 +34,12 @@ export async function startCursorOAuth(): Promise<{
     const stripAnsi = (str: string) => str.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
 
     const extractUrl = () => {
+      // Step 1: Strip ANSI codes
       let cleanOutput = stripAnsi(stdout);
-      // The URL is split across lines - join them
-      // First remove line continuations (hyphen + newline)
-      cleanOutput = cleanOutput.replace(/-\n/g, "");
-      // Then join remaining newlines that are within the URL
-      // URL starts with https://cursor.com/loginDeepControl and continues until whitespace
-      cleanOutput = cleanOutput.replace(/\n/g, "");
-      // Extract full URL - now it should be continuous
+      // Step 2: Remove ALL whitespace (newlines, spaces, tabs)
+      // The URL is split across lines with continuation spaces
+      cleanOutput = cleanOutput.replace(/\s/g, "");
+      // Step 3: Now extract the continuous URL
       const urlMatch = cleanOutput.match(/https:\/\/cursor\.com\/loginDeepControl[^\s]*/);
       if (urlMatch) {
         return urlMatch[0];
@@ -52,6 +50,9 @@ export async function startCursorOAuth(): Promise<{
     // Give cursor-agent time to output the URL
     setTimeout(() => {
       const url = extractUrl();
+
+      console.error(`[cursor-acp] Extracted stdout: ${stdout.substring(0, 500)}`);
+      console.error(`[cursor-acp] Extracted URL: ${url}`);
 
       if (!url) {
         proc.kill();
