@@ -4,6 +4,12 @@ A lightweight OpenCode plugin that bridges to Cursor CLI via HTTP proxy. No E2BI
 
 ## Installation
 
+**One-Line Install:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Nomadcxx/opencode-cursor/main/install.sh | bash
+```
+
 **Quick Install (Go TUI Installer):**
 
 ```bash
