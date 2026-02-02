@@ -97,14 +97,19 @@ flowchart TB
     I --> D
 ```
 
-## Alternatives
+## Comparison
 
-| Feature | cursor-acp | cursor-agent CLI | Cursor IDE |
-|---------|------------|------------------|------------|
-| OpenCode Integration | Native | Manual | No |
-| Long Prompts | HTTP proxy | CLI limits | No limits |
-| Terminal | Yes | Yes | GUI only |
-| Auth | OAuth | OAuth | Built-in |
+| | cursor-acp | cursor-agent CLI | Direct API |
+|---|------------|------------------|------------|
+| **Interface** | HTTP (OpenAI-compatible) | CLI subprocess | REST API |
+| **Max Prompt** | ~unlimited (HTTP body) | ~128KB (ARG_MAX) | Provider limit |
+| **Streaming** | SSE chunks | stdout | SSE/WebSocket |
+| **Auth Storage** | `~/.cursor/auth.json` | `~/.cursor/auth.json` | env vars / keychain |
+| **Billing** | Cursor Pro quota | Cursor Pro quota | Per-token |
+| **OpenCode Config** | Plugin + provider | Shell tool | Provider only |
+| **Dependencies** | cursor-agent, bun | cursor-agent | None |
+| **Error Handling** | Parsed (quota/auth/model) | Raw stderr | Provider-specific |
+| **Request Flow** | OpenCode → Proxy → CLI → API | Shell → CLI → API | OpenCode → API |
 
 ## Prerequisites
 
