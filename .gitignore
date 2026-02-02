@@ -3,7 +3,8 @@ dist/
 *.log
 .DS_Store
 bun.lock
-installer
+# Installer binaries (not source)
+cmd/installer/installer-binary
 opencode-cursor-installer
 opencode-cursor-*.log
 

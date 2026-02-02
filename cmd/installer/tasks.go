@@ -21,7 +21,7 @@ func (m model) startInstallation() (tea.Model, tea.Cmd) {
 		{name: "Check prerequisites", description: "Verifying bun and cursor-agent", execute: checkPrerequisites, status: statusPending},
 		{name: "Build plugin", description: "Running bun install && bun run build", execute: buildPlugin, status: statusPending},
 		{name: "Install AI SDK", description: "Adding @ai-sdk/openai-compatible to opencode", execute: installAiSdk, status: statusPending},
-		{name: "Create symlink", description: "Linking to OpenCode node_modules", execute: createSymlink, status: statusPending},
+		{name: "Create symlink", description: "Linking to OpenCode plugin directory", execute: createSymlink, status: statusPending},
 		{name: "Update config", description: "Adding cursor-acp plugin to opencode.json", execute: updateConfig, status: statusPending},
 		{name: "Validate config", description: "Checking JSON syntax", execute: validateConfig, status: statusPending},
 		{name: "Verify plugin loads", description: "Checking if plugin appears in opencode", execute: verifyPostInstall, optional: true, status: statusPending},
@@ -131,23 +131,17 @@ func installAcpSdk(m *model) error {
 }
 
 func createSymlink(m *model) error {
-	// Create symlink in OpenCode's node_modules
-	configDir, _ := getConfigDir()
-	nodeModulesDir := filepath.Join(configDir, "opencode", "node_modules")
-
-	if err := os.MkdirAll(nodeModulesDir, 0755); err != nil {
-		return fmt.Errorf("failed to create node_modules directory: %w", err)
-	}
-
-	symlinkPath := filepath.Join(nodeModulesDir, "opencode-cursor")
+	// Create symlink in OpenCode's plugin directory
+	symlinkPath := filepath.Join(m.pluginDir, "cursor-acp.js")
 
 	// Remove existing symlink if present
 	if _, err := os.Lstat(symlinkPath); err == nil {
 		os.Remove(symlinkPath)
 	}
 
-	// Create symlink to project directory
-	if err := os.Symlink(m.projectDir, symlinkPath); err != nil {
+	// Create symlink to built plugin
+	distPath := filepath.Join(m.projectDir, "dist", "index.js")
+	if err := os.Symlink(distPath, symlinkPath); err != nil {
 		return fmt.Errorf("failed to create symlink: %w", err)
 	}
 
@@ -238,23 +232,23 @@ func updateConfig(m *model) error {
 	// Preserve any other user fields (npm, options, baseURL, etc.)
 	providers["cursor-acp"] = existingCursorAcp
 
-	// Ensure plugin array exists and add opencode-cursor
+	// Ensure plugin array exists and add cursor-acp
 	plugins, ok := config["plugin"].([]interface{})
 	if !ok {
 		plugins = []interface{}{}
 	}
 
-	// Check if opencode-cursor is already in the plugin list
+	// Check if cursor-acp is already in the plugin list
 	hasPlugin := false
 	for _, p := range plugins {
-		if p == "opencode-cursor" {
+		if p == "cursor-acp" {
 			hasPlugin = true
 			break
 		}
 	}
 
 	if !hasPlugin {
-		plugins = append(plugins, "opencode-cursor")
+		plugins = append(plugins, "cursor-acp")
 		config["plugin"] = plugins
 	}
 
@@ -385,7 +379,7 @@ func (m model) startUninstallation() (tea.Model, tea.Cmd) {
 		{name: "Remove plugin symlink", description: "Removing cursor-acp.js from plugin directory", execute: removeSymlink, status: statusPending},
 		{name: "Remove ACP SDK", description: "Removing @agentclientprotocol/sdk from opencode", execute: removeAcpSdk, status: statusPending},
 		{name: "Remove provider config", description: "Removing cursor-acp from opencode.json", execute: removeProviderConfig, status: statusPending},
-		{name: "Remove old plugin", description: "Removing opencode-cursor-auth if present", execute: removeOldPlugin, status: statusPending},
+		{name: "Remove old plugin", description: "Removing cursor-acp-auth if present", execute: removeOldPlugin, status: statusPending},
 		{name: "Validate config", description: "Checking JSON syntax", execute: validateConfigAfterUninstall, status: statusPending},
 	}
 
@@ -395,9 +389,8 @@ func (m model) startUninstallation() (tea.Model, tea.Cmd) {
 }
 
 func removeSymlink(m *model) error {
-	// Remove symlink from node_modules
-	configDir, _ := getConfigDir()
-	symlinkPath := filepath.Join(configDir, "opencode", "node_modules", "opencode-cursor")
+	// Remove symlink from plugin directory
+	symlinkPath := filepath.Join(m.pluginDir, "cursor-acp.js")
 
 	// Check if symlink exists
 	if _, err := os.Lstat(symlinkPath); os.IsNotExist(err) {
@@ -410,10 +403,11 @@ func removeSymlink(m *model) error {
 		return fmt.Errorf("failed to remove symlink: %w", err)
 	}
 
-	// Also remove old plugin directory symlink if it exists (migration)
-	oldSymlinkPath := filepath.Join(m.pluginDir, "cursor-acp.js")
-	if _, err := os.Lstat(oldSymlinkPath); err == nil {
-		os.Remove(oldSymlinkPath)
+	// Also remove old node_modules symlink if it exists (migration from older installer)
+	configDir, _ := getConfigDir()
+	oldNodeModulesPath := filepath.Join(configDir, "opencode", "node_modules", "cursor-acp")
+	if _, err := os.Lstat(oldNodeModulesPath); err == nil {
+		os.Remove(oldNodeModulesPath)
 	}
 
 	return nil
@@ -494,11 +488,11 @@ func removeProviderConfig(m *model) error {
 		}
 	}
 
-	// Remove opencode-cursor from plugin array
+	// Remove cursor-acp from plugin array
 	if plugins, ok := config["plugin"].([]interface{}); ok {
 		var newPlugins []interface{}
 		for _, p := range plugins {
-			if p != "opencode-cursor" {
+			if p != "cursor-acp" {
 				newPlugins = append(newPlugins, p)
 			}
 		}
@@ -565,7 +559,7 @@ func removeOldPlugin(m *model) error {
 			if !ok {
 				continue
 			}
-			if !strings.HasPrefix(pluginStr, "opencode-cursor-auth") {
+			if !strings.HasPrefix(pluginStr, "cursor-acp-auth") {
 				newPlugins = append(newPlugins, pluginStr)
 			}
 		}
@@ -582,7 +576,7 @@ func removeOldPlugin(m *model) error {
 	}
 
 	cacheDir := filepath.Join(os.Getenv("HOME"), ".cache", "opencode", "node_modules")
-	oldPluginPath := filepath.Join(cacheDir, "opencode-cursor-auth")
+	oldPluginPath := filepath.Join(cacheDir, "cursor-acp-auth")
 	if _, err := os.Stat(oldPluginPath); err == nil {
 		if err := os.RemoveAll(oldPluginPath); err != nil {
 			return fmt.Errorf("failed to remove old plugin from cache: %w", err)
