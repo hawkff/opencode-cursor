@@ -82,12 +82,15 @@ func commandExists(cmd string) bool {
 
 // runCommand executes a command and logs output
 func runCommand(name string, cmd *exec.Cmd, logFile *os.File) error {
+	timestamp := time.Now().Format("15:04:05")
+	cmdStr := cmd.String()
+
 	if logFile != nil {
-		logFile.WriteString(fmt.Sprintf("[%s] Running: %s\n",
-			time.Now().Format("15:04:05"), cmd.String()))
+		logFile.WriteString(fmt.Sprintf("[%s] Running: %s\n", timestamp, cmdStr))
 	}
 
 	output, err := cmd.CombinedOutput()
+	outputStr := string(output)
 
 	if logFile != nil {
 		if len(output) > 0 {
@@ -95,16 +98,20 @@ func runCommand(name string, cmd *exec.Cmd, logFile *os.File) error {
 			logFile.WriteString("\n")
 		}
 		if err != nil {
-			logFile.WriteString(fmt.Sprintf("[%s] Error: %v\n\n",
-				time.Now().Format("15:04:05"), err))
+			logFile.WriteString(fmt.Sprintf("[%s] Error: %v\n\n", timestamp, err))
 		} else {
-			logFile.WriteString(fmt.Sprintf("[%s] Success\n\n",
-				time.Now().Format("15:04:05")))
+			logFile.WriteString(fmt.Sprintf("[%s] Success\n\n", timestamp))
 		}
 		logFile.Sync()
+	} else if err != nil {
+		fmt.Fprintf(os.Stderr, "[%s] Command failed: %s\nOutput: %s\nError: %v\n",
+			timestamp, cmdStr, outputStr, err)
 	}
 
-	return err
+	if err != nil {
+		return NewExecError(name+" failed", outputStr, err)
+	}
+	return nil
 }
 
 // validateJSON checks if a file contains valid JSON
