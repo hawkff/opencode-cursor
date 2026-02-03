@@ -4,21 +4,32 @@ Use your Cursor Pro subscription in [OpenCode](https://github.com/anomalyco/open
 
 ## Installation
 
-**One-Line Install:**
+**Option A: Let an LLM do it**
+
+Paste this into any LLM agent (Claude Code, OpenCode, Cursor, etc.):
+
+```
+Install the cursor-acp plugin for OpenCode by following: https://raw.githubusercontent.com/Nomadcxx/opencode-cursor/main/README.md
+
+After installation, verify by running: cursor-agent --list-models
+Then check ~/.config/opencode/opencode.json contains the cursor-acp provider with models.
+```
+
+**Option B: One-Line Install**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Nomadcxx/opencode-cursor/main/install.sh | bash
 ```
 
-**TUI Installer:**
+**Option C: TUI Installer**
 
 ```bash
 git clone https://github.com/Nomadcxx/opencode-cursor.git
 cd opencode-cursor
-./cmd/installer/installer-binary
+go build -o ./installer ./cmd/installer && ./installer
 ```
 
-**Manual Install:**
+**Option D: Manual Install**
 
 ```bash
 bun install && bun run build
