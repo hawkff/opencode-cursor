@@ -162,15 +162,19 @@ async function ensureCursorProxyServer(workspaceDirectory: string): Promise<stri
         workspaceDirectory,
         "--model",
         model,
-        prompt,
       ];
 
       const child = bunAny.Bun.spawn({
         cmd,
+        stdin: "pipe",
         stdout: "pipe",
         stderr: "pipe",
         env: bunAny.Bun.env,
       });
+
+      // Write prompt to stdin to avoid E2BIG error
+      child.stdin.write(prompt);
+      child.stdin.end();
 
       if (!stream) {
         const [stdoutText, stderrText] = await Promise.all([
@@ -365,10 +369,13 @@ async function ensureCursorProxyServer(workspaceDirectory: string): Promise<stri
         workspaceDirectory,
         "--model",
         model,
-        prompt,
       ];
 
-      const child = spawn(cmd[0], cmd.slice(1), { stdio: ["ignore", "pipe", "pipe"] });
+      const child = spawn(cmd[0], cmd.slice(1), { stdio: ["pipe", "pipe", "pipe"] });
+
+      // Write prompt to stdin to avoid E2BIG error
+      child.stdin.write(prompt);
+      child.stdin.end();
 
       if (!stream) {
         const stdoutChunks: Buffer[] = [];
