@@ -23,19 +23,24 @@ func fetchCursorModels() (map[string]interface{}, error) {
 	cmd := exec.CommandContext(ctx, "cursor-agent", "--list-models")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("cursor-agent --list-models failed: %w", err)
+		return nil, NewExecError("cursor-agent --list-models failed", string(output), err)
 	}
 
 	// Strip ANSI escape codes
 	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 	clean := ansiRegex.ReplaceAllString(string(output), "")
 
-	// Parse lines: "model-id - Display Name [(current)] [(default)]"
-	lineRegex := regexp.MustCompile(`^([a-z0-9.-]+)\s+-\s+(.+?)(?:\s+\((current|default)\))*\s*$`)
+	// More permissive regex: allows uppercase, underscores, and various separators
+	// Pattern: model-id followed by separator and display name
+	lineRegex := regexp.MustCompile(`^([a-zA-Z0-9._-]+)\s+[-–—:]\s+(.+?)(?:\s+\((current|default)\))*\s*$`)
 	models := make(map[string]interface{})
 
-	for _, line := range strings.Split(clean, "\n") {
+	lines := strings.Split(clean, "\n")
+	for _, line := range lines {
 		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "Available") || strings.HasPrefix(line, "Tip:") {
+			continue
+		}
 		matches := lineRegex.FindStringSubmatch(line)
 		if len(matches) >= 3 {
 			id := matches[1]
@@ -45,7 +50,11 @@ func fetchCursorModels() (map[string]interface{}, error) {
 	}
 
 	if len(models) == 0 {
-		return nil, fmt.Errorf("no models found in cursor-agent output")
+		return nil, NewParseError(
+			"no models found in cursor-agent output",
+			clean,
+			fmt.Errorf("regex matched 0 of %d lines; raw output preserved in error", len(lines)),
+		)
 	}
 
 	return models, nil
