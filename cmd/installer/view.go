@@ -202,6 +202,14 @@ func (m model) renderInstalling() string {
 				b.WriteString(lipgloss.NewStyle().Foreground(FgMuted).Render(
 					fmt.Sprintf("  └─ See logs: %s\n", err.logFile)))
 			}
+			if strings.Contains(err.message, "no models found") {
+				b.WriteString(lipgloss.NewStyle().Foreground(WarningColor).Render(
+					"  └─ Hint: Run with --debug to see raw cursor-agent output\n"))
+			}
+			if strings.Contains(err.message, "cursor-agent") && strings.Contains(err.message, "failed") {
+				b.WriteString(lipgloss.NewStyle().Foreground(WarningColor).Render(
+					"  └─ Hint: Ensure cursor-agent is installed and logged in\n"))
+			}
 		}
 	}
 
@@ -222,8 +230,43 @@ func (m model) renderComplete() string {
 		if m.isUninstall {
 			action = "Uninstallation"
 		}
-		return lipgloss.NewStyle().Foreground(ErrorColor).Render(
-			fmt.Sprintf("%s failed.\nCheck errors above.\n\nPress Enter to exit", action))
+
+		var b strings.Builder
+		b.WriteString(lipgloss.NewStyle().Foreground(ErrorColor).Bold(true).Render(
+			fmt.Sprintf("✗ %s Failed\n\n", action)))
+
+		for _, task := range m.tasks {
+			var line string
+			switch task.status {
+			case statusComplete:
+				line = checkMark.String() + " " + task.name
+			case statusFailed:
+				line = failMark.String() + " " + task.name
+			case statusSkipped:
+				line = skipMark.String() + " " + task.name
+			default:
+				line = lipgloss.NewStyle().Foreground(FgMuted).Render("  " + task.name)
+			}
+			b.WriteString(line + "\n")
+
+			if task.status == statusFailed && task.errorDetails != nil {
+				err := task.errorDetails
+				b.WriteString(lipgloss.NewStyle().Foreground(ErrorColor).Render(
+					fmt.Sprintf("  └─ Error: %s\n", err.message)))
+				if err.logFile != "" {
+					b.WriteString(lipgloss.NewStyle().Foreground(FgMuted).Render(
+						fmt.Sprintf("  └─ Logs: %s\n", err.logFile)))
+				}
+				if strings.Contains(err.message, "no models found") {
+					b.WriteString(lipgloss.NewStyle().Foreground(WarningColor).Render(
+						"  └─ Hint: Run with --debug to see raw cursor-agent output\n"))
+				}
+			}
+		}
+
+		b.WriteString("\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(FgMuted).Render("Press Enter to exit"))
+		return b.String()
 	}
 
 	var b strings.Builder
