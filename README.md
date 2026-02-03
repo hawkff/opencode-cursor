@@ -36,19 +36,17 @@ Add to `~/.config/opencode/opencode.json`:
       "npm": "@ai-sdk/openai-compatible",
       "options": { "baseURL": "http://127.0.0.1:32124/v1" },
       "models": {
-        "auto": { "name": "Auto" },
-        "sonnet-4.5": { "name": "Claude 4.5 Sonnet" },
-        "opus-4.5": { "name": "Claude 4.5 Opus" },
-        "gpt-5.2": { "name": "GPT-5.2" },
-        "gemini-3-pro": { "name": "Gemini 3 Pro" },
-        "grok-4": { "name": "Grok 4" }
+        "auto": { "name": "Auto" }
       }
     }
   }
 }
 ```
 
-> **Note:** The TUI installer adds all available models. See `cursor-agent --list-models` for the full list.
+**Sync models** (the installers do this automatically):
+```bash
+./scripts/sync-models.sh
+```
 
 ## Authentication
 
@@ -81,19 +79,18 @@ opencode run "your prompt" --model cursor-acp/sonnet-4.5
 
 ## Models
 
-Models are discovered dynamically from `cursor-agent --list-models`. The installer and sync script automatically populate your config.
+Models are pulled from `cursor-agent --list-models` and written to your config during installation. If Cursor adds new models later, re-run:
 
-**Sync models manually:**
 ```bash
 ./scripts/sync-models.sh
 ```
 
-**API endpoint** (when proxy is running):
+The proxy also exposes a `/v1/models` endpoint that fetches models in real-time:
 ```bash
 curl http://127.0.0.1:32124/v1/models
 ```
 
-Common models include: `auto`, `sonnet-4.5`, `opus-4.5`, `gpt-5.2`, `gemini-3-pro`, `grok`, `composer-1`
+Common models: `auto`, `sonnet-4.5`, `opus-4.5`, `gpt-5.2`, `gemini-3-pro`, `grok`, `composer-1`
 
 ## Architecture
 
