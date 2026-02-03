@@ -52,14 +52,25 @@ Add to `~/.config/opencode/opencode.json`:
 
 ## Authentication
 
-```bash
-# Option 1: Via OpenCode
-opencode auth login
-# Select "Other" → enter "cursor-acp" → open URL in browser
+### Option 1: Via OpenCode (Recommended)
 
-# Option 2: Direct
+```bash
+opencode auth login
+```
+
+Then follow the prompts:
+1. Select **"Other"** from the provider list
+2. Enter provider id: **cursor-acp**
+3. Browser will open automatically - click "Continue with Cursor"
+4. Return to terminal when you see "Login successful"
+
+### Option 2: Direct (CLI only)
+
+```bash
 cursor-agent login
 ```
+
+Then open the URL shown in your browser and complete authentication.
 
 ## Usage
 
