@@ -187,12 +187,10 @@ async function ensureCursorProxyServer(workspaceDirectory: string): Promise<stri
           const parsed = parseAgentError(stderr);
           const userError = formatErrorForUser(parsed);
           log.error("cursor-cli failed", { type: parsed.type, message: parsed.message });
-          return new Response(JSON.stringify({
-            error: userError,
-            type: parsed.type,
-            details: parsed.details,
-          }), {
-            status: parsed.type === "auth" ? 401 : parsed.type === "quota" ? 429 : 500,
+          // Return error as chat completion so user always sees it
+          const errorPayload = createChatCompletionResponse(model, userError);
+          return new Response(JSON.stringify(errorPayload), {
+            status: 200,
             headers: { "Content-Type": "application/json" },
           });
         }
@@ -387,15 +385,22 @@ async function ensureCursorProxyServer(workspaceDirectory: string): Promise<stri
             const parsed = parseAgentError(stderr);
             const userError = formatErrorForUser(parsed);
             log.error("cursor-cli failed", { type: parsed.type, message: parsed.message });
-            res.writeHead(
-              parsed.type === "auth" ? 401 : parsed.type === "quota" ? 429 : 500,
-              { "Content-Type": "application/json" }
-            );
-            res.end(JSON.stringify({
-              error: userError,
-              type: parsed.type,
-              details: parsed.details,
-            }));
+            // Return error as chat completion so user always sees it
+            const errorResponse = {
+              id: `cursor-acp-${Date.now()}`,
+              object: "chat.completion",
+              created: Math.floor(Date.now() / 1000),
+              model,
+              choices: [
+                {
+                  index: 0,
+                  message: { role: "assistant", content: userError },
+                  finish_reason: "stop",
+                },
+              ],
+            };
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify(errorResponse));
             return;
           }
 
