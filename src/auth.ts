@@ -21,10 +21,7 @@ export interface AuthResult {
   error?: string;
 }
 
-/**
- * Poll for authentication file with timeout
- */
-async function pollForAuthFile(
+export async function pollForAuthFile(
   timeoutMs: number = AUTH_POLL_TIMEOUT,
   intervalMs: number = AUTH_POLL_INTERVAL
 ): Promise<boolean> {

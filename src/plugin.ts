@@ -9,7 +9,7 @@ import { parseAgentError, formatErrorForUser, stripAnsi } from "./utils/errors";
 
 const log = createLogger("plugin");
 
-async function ensurePluginDirectory(): Promise<void> {
+export async function ensurePluginDirectory(): Promise<void> {
   const pluginDir = join(homedir(), ".config", "opencode", "plugin");
   try {
     await mkdir(pluginDir, { recursive: true });
