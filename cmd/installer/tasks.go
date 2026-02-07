@@ -212,6 +212,8 @@ func createSymlink(m *model) error {
 }
 
 func updateConfig(m *model) error {
+	// Persist a timestamped backup for recovery outside the installer process
+	_ = backupConfigToDisk(m.configPath)
 	if err := createBackup(m, m.configPath); err != nil {
 		return fmt.Errorf("failed to backup config: %w", err)
 	}
@@ -418,6 +420,22 @@ func cleanupBackups(m *model) {
 	m.backupFiles = make(map[string][]byte)
 }
 
+// backupConfigToDisk writes a timestamped backup alongside the given file.
+// Failures are intentionally non-fatal to avoid blocking installation.
+func backupConfigToDisk(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	ts := time.Now().Format("20060102-150405")
+	backupPath := fmt.Sprintf("%s.bak.%s", path, ts)
+	return os.WriteFile(backupPath, data, 0644)
+}
+
 // Uninstall functions
 func (m model) startUninstallation() (tea.Model, tea.Cmd) {
 	m.step = stepUninstalling
@@ -511,6 +529,7 @@ func removeAcpSdk(m *model) error {
 }
 
 func removeProviderConfig(m *model) error {
+	_ = backupConfigToDisk(m.configPath)
 	if err := createBackup(m, m.configPath); err != nil {
 		return fmt.Errorf("failed to backup config: %w", err)
 	}
@@ -583,6 +602,7 @@ func removeOldPlugin(m *model) error {
 	configDir, _ := getConfigDir()
 	configPath := filepath.Join(configDir, "opencode", "opencode.json")
 
+	_ = backupConfigToDisk(configPath)
 	if err := createBackup(m, configPath); err != nil {
 		return fmt.Errorf("failed to backup config: %w", err)
 	}

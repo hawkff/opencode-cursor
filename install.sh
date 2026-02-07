@@ -81,6 +81,11 @@ else
     ln -sf "$(pwd)/dist/plugin-entry.js" "${PLUGIN_DIR}/cursor-acp.js"
 
     echo "Updating config..."
+    if [ -f "$CONFIG_PATH" ]; then
+        CONFIG_BACKUP="${CONFIG_PATH}.bak.$(date +%Y%m%d-%H%M%S)"
+        cp "$CONFIG_PATH" "$CONFIG_BACKUP"
+        echo "Config backup written to $CONFIG_BACKUP"
+    fi
     MODELS_JSON="{}"
     if command -v jq &>/dev/null; then
         RAW=$(cursor-agent models 2>&1 || true)

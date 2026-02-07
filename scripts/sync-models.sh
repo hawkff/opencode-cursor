@@ -10,6 +10,11 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
   exit 1
 fi
 
+# Make a timestamped backup before we mutate the config
+BACKUP_PATH="${CONFIG_FILE}.bak.$(date +%Y%m%d-%H%M%S)"
+cp "$CONFIG_FILE" "$BACKUP_PATH"
+echo "Backup written to $BACKUP_PATH"
+
 if ! command -v cursor-agent &>/dev/null; then
   echo "Error: cursor-agent not found in PATH"
   exit 1
