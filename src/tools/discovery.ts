@@ -26,7 +26,8 @@ export class OpenCodeToolDiscovery {
   constructor(client: any, opts: DiscoveryOptions = {}) {
     this.client = client;
     this.ttl = opts.ttlMs ?? Number(process.env.CURSOR_ACP_TOOL_CACHE_TTL_MS || 60000);
-    this.executorPref = opts.executor ?? (process.env.CURSOR_ACP_TOOL_EXECUTOR as any) ?? "auto";
+    // Default to SDK-first; users can force CLI via env or opts if they really need to.
+    this.executorPref = opts.executor ?? ((process.env.CURSOR_ACP_TOOL_EXECUTOR as any) || "sdk");
   }
 
   async listTools(): Promise<OpenCodeTool[]> {
@@ -51,7 +52,7 @@ export class OpenCodeToolDiscovery {
       }
     }
 
-    // Fallback: CLI opencode tool list --json
+    // Fallback: CLI opencode tool list --json (only if executorPref allows)
     if (tools.length === 0 && this.executorPref !== "sdk") {
       try {
         const { spawnSync } = await import("node:child_process");
