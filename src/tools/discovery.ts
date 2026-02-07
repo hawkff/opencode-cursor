@@ -8,7 +8,7 @@ export interface OpenCodeTool {
   name: string; // namespaced for OpenAI (e.g., oc_<id>)
   description: string;
   parameters: any; // JSON Schema
-  source: "sdk" | "cli";
+  source: "sdk" | "cli" | "mcp";
 }
 
 export interface DiscoveryOptions {
@@ -42,6 +42,10 @@ export class OpenCodeToolDiscovery {
       try {
         const resp: ToolListResponse = await this.client.tool.list();
         tools = (resp?.data?.tools || []).map((t: any) => this.normalize(t, "sdk"));
+
+        // Merge MCP tools if available on client (best-effort)
+        const mcpTools = await this.tryListMcpTools();
+        tools = tools.concat(mcpTools);
       } catch (err) {
         log.warn("SDK tool.list failed, will try CLI", { error: String(err) });
       }
@@ -77,7 +81,7 @@ export class OpenCodeToolDiscovery {
     return this.cache.get(name);
   }
 
-  private normalize(t: any, source: "sdk" | "cli"): OpenCodeTool {
+  private normalize(t: any, source: "sdk" | "cli" | "mcp"): OpenCodeTool {
     const id = String(t.id || t.name || "unknown");
     const name = this.namespace(id);
     return {
@@ -92,5 +96,17 @@ export class OpenCodeToolDiscovery {
   private namespace(id: string): string {
     const sanitized = id.replace(/[^a-zA-Z0-9_\-]/g, "_").slice(0, 59); // leave room for prefix
     return `oc_${sanitized}`;
+  }
+
+  // Best-effort MCP discovery (if SDK exposes it)
+  private async tryListMcpTools(): Promise<OpenCodeTool[]> {
+    try {
+      const mcpList = this.client?.mcp?.tool?.list ? await this.client.mcp.tool.list() : null;
+      if (!mcpList?.data?.tools) return [];
+      return mcpList.data.tools.map((t: any) => this.normalize(t, "mcp"));
+    } catch (err) {
+      log.debug("MCP tool discovery skipped", { error: String(err) });
+      return [];
+    }
   }
 }
