@@ -16,10 +16,6 @@ import { toOpenAiParameters, describeTool } from "./tools/schema.js";
 import { OpenCodeToolExecutor } from "./tools/executor.js";
 import { ToolRouter } from "./tools/router.js";
 import { createOpencodeClient } from "@opencode-ai/sdk";
-import { OpenCodeToolDiscovery } from "./tools/discovery.js";
-import { toOpenAiParameters, describeTool } from "./tools/schema.js";
-import { OpenCodeToolExecutor } from "./tools/executor.js";
-import { ToolRouter } from "./tools/router.js";
 
 const log = createLogger("plugin");
 
@@ -780,9 +776,12 @@ export const CursorPlugin: Plugin = async ({ $, directory, client, serverUrl }: 
       // Inject OpenCode tools/skills for the model to call (optional)
       if (toolsEnabled) {
         try {
-          output.options.tools = await refreshTools();
+          const toolDefs = await refreshTools();
+          if (toolDefs.length) {
+            output.options.tools = toolDefs;
+          }
         } catch (err) {
-          log.warn("Failed to refresh tools", { error: String(err) });
+          log.debug("Failed to refresh tools", { error: String(err) });
         }
       }
     },

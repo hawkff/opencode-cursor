@@ -50,7 +50,7 @@ export class OpenCodeToolDiscovery {
         const mcpTools = await this.tryListMcpTools();
         tools = tools.concat(mcpTools);
       } catch (err) {
-        log.warn("SDK tool.list failed, will try CLI", { error: String(err) });
+        log.debug("SDK tool.list failed, will try CLI", { error: String(err) });
       }
     }
 
@@ -66,16 +66,14 @@ export class OpenCodeToolDiscovery {
         if (parsed?.data?.tools?.length) {
           tools = parsed.data.tools.map((t: any) => this.normalize(t, "cli"));
         } else {
-          log.warn("CLI tool list failed", { status: res.status, stderr: res.stderr });
+          log.debug("CLI tool list failed", { status: res.status, stderr: res.stderr });
         }
       } catch (err) {
-        log.error("CLI tool list error", { error: String(err) });
+        log.debug("CLI tool list error", { error: String(err) });
       }
     }
 
-    if (tools.length === 0) {
-      log.warn("No tools discovered via SDK or CLI; tool exposure will be skipped");
-    }
+    // Silent skip if none
 
     // Deduplicate by id after namespace
     const map = new Map<string, OpenCodeTool>();

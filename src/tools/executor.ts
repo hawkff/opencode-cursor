@@ -1,5 +1,6 @@
 import { createLogger } from "../utils/logger";
 import stripAnsi from "strip-ansi";
+import type { ToolRegistry } from "./registry";
 
 const log = createLogger("tools:executor");
 
@@ -14,6 +15,61 @@ export interface ExecutorOptions {
   mode?: "sdk" | "cli" | "auto";
 }
 
+export interface ParsedToolCall {
+  name: string;
+  arguments: Record<string, any>;
+}
+
+/**
+ * ToolExecutor - Executes tools registered in ToolRegistry
+ * Used by the plugin to run local tools via their registered handlers
+ */
+export class ToolExecutor {
+  private registry: ToolRegistry;
+
+  constructor(registry: ToolRegistry) {
+    this.registry = registry;
+  }
+
+  async execute(name: string, args: Record<string, any>): Promise<string> {
+    const executor = this.registry.getExecutor(name);
+    if (!executor) {
+      throw new Error(`Tool '${name}' not found in registry`);
+    }
+    return executor(args);
+  }
+
+  parseToolCall(json: string): ParsedToolCall {
+    const parsed = JSON.parse(json);
+    
+    // Handle OpenAI-style: { name: "bash", arguments: "{\"command\": \"ls\"}" }
+    if (parsed.name && typeof parsed.arguments === "string") {
+      return {
+        name: parsed.name,
+        arguments: JSON.parse(parsed.arguments),
+      };
+    }
+    
+    // Handle simple style: { tool: "bash", arguments: { command: "ls" } }
+    if (parsed.tool) {
+      return {
+        name: parsed.tool,
+        arguments: parsed.arguments || {},
+      };
+    }
+    
+    // Handle direct style: { name: "bash", arguments: { command: "ls" } }
+    return {
+      name: parsed.name,
+      arguments: parsed.arguments || {},
+    };
+  }
+}
+
+/**
+ * OpenCodeToolExecutor - Executes tools via OpenCode SDK or CLI fallback
+ * Used for remote tool execution through the OpenCode platform
+ */
 export class OpenCodeToolExecutor {
   private client: any;
   private timeout: number;
