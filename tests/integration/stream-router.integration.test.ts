@@ -41,4 +41,41 @@ describe("Stream + ToolRouter end-to-end", () => {
     // Ensure converter output still present
     expect(sse.length).toBeGreaterThan(0);
   });
+
+  it("handles multiple tool_calls with distinct call_ids", async () => {
+    const toolsByName = new Map();
+    toolsByName.set("oc_one", { id: "one", name: "oc_one", description: "", parameters: {} });
+    toolsByName.set("oc_two", { id: "two", name: "oc_two", description: "", parameters: {} });
+
+    const executor = new (class extends OpenCodeToolExecutor {
+      constructor() { super({}, { mode: "sdk" }); }
+      async execute(toolId: string, args: any) {
+        return { status: "success", output: JSON.stringify({ toolId, args }) };
+      }
+    })();
+
+    const router = new ToolRouter({ executor, toolsByName });
+
+    const events = [
+      { type: "tool_call", call_id: "call-1", name: "oc_one", tool_call: { oc_one: { args: { a: 1 } } } },
+      { type: "tool_call", call_id: "call-2", name: "oc_two", tool_call: { oc_two: { args: { b: 2 } } } },
+    ];
+
+    const results = await Promise.all(
+      events.map((ev) => router.handleToolCall(ev as any, { id: "chunk", created: 123, model: "cursor" }))
+    );
+
+    expect(results[0]?.choices[0].delta.tool_calls[0].id).toBe("call-1");
+    expect(results[1]?.choices[0].delta.tool_calls[0].id).toBe("call-2");
+
+    const args1Str = results[0]?.choices[0].delta.tool_calls[0].function.arguments || "{}";
+    const args2Str = results[1]?.choices[0].delta.tool_calls[0].function.arguments || "{}";
+    const args1 = JSON.parse(args1Str);
+    const args2 = JSON.parse(args2Str);
+
+    expect(args1.result).toContain("\"toolId\":\"one\"");
+    expect(args1.result).toContain("\"a\":1");
+    expect(args2.result).toContain("\"toolId\":\"two\"");
+    expect(args2.result).toContain("\"b\":2");
+  });
 });
