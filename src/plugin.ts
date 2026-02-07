@@ -692,20 +692,38 @@ export const CursorPlugin: Plugin = async ({ $, directory, client }: PluginInput
   const executor = toolsEnabled ? new OpenCodeToolExecutor(client) : null;
   const toolsByName = new Map<string, any>();
   const router = toolsEnabled && executor ? new ToolRouter({ executor, toolsByName }) : null;
+  let lastToolNames: string[] = [];
 
   async function refreshTools() {
     if (!discovery || !router) return [];
     const list = await discovery.listTools();
     toolsByName.clear();
     list.forEach((t) => toolsByName.set(t.name, t));
-    return list.map((t) => ({
-      type: "function" as const,
-      function: {
-        name: t.name,
-        description: describeTool(t),
-        parameters: toOpenAiParameters(t.parameters),
-      },
-    }));
+
+    const toolEntries: any[] = [];
+    const add = (name: string, t: any) => {
+      toolEntries.push({
+        type: "function" as const,
+        function: {
+          name,
+          description: describeTool(t),
+          parameters: toOpenAiParameters(t.parameters),
+        },
+      });
+    };
+
+    for (const t of list) {
+      add(t.name, t);
+      const skillAlias = `oc_skill_${t.id.replace(/[^a-zA-Z0-9_\\-]/g, "_")}`.slice(0, 64);
+      if (!toolsByName.has(skillAlias)) add(skillAlias, t);
+      if (t.id.includes("superskill")) {
+        const superAlias = `oc_superskill_${t.id.replace(/[^a-zA-Z0-9_\\-]/g, "_")}`.slice(0, 64);
+        if (!toolsByName.has(superAlias)) add(superAlias, t);
+      }
+    }
+
+    lastToolNames = toolEntries.map((e) => e.function.name);
+    return toolEntries;
   }
 
   const proxyBaseURL = await ensureCursorProxyServer(directory, router);
@@ -759,6 +777,15 @@ export const CursorPlugin: Plugin = async ({ $, directory, client }: PluginInput
           log.warn("Failed to refresh tools", { error: String(err) });
         }
       }
+    },
+
+    async "experimental.chat.system.transform"(input: any, output: { system: string[] }) {
+      if (!toolsEnabled || lastToolNames.length === 0) return;
+      const names = lastToolNames.join(", ");
+      output.system = output.system || [];
+      output.system.push(
+        `Available OpenCode tools (use via tool calls): ${names}. Aliases include oc_skill_* and oc_superskill_* when applicable.`
+      );
     },
   };
 };
