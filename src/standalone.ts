@@ -33,6 +33,7 @@ interface ModelInfo {
 }
 
 const MODELS_TIMEOUT_MS = 30000;
+const MAX_BODY_SIZE = 1_048_576;
 
 function createChatCompletionResponse(model: string, content: string, reasoningContent?: string) {
   const message: ChatMessage = { role: "assistant", content };
@@ -159,10 +160,19 @@ async function handleRequest(req: any, res: any): Promise<void> {
       return;
     }
 
-    let body = "";
+    const bodyChunks: Buffer[] = [];
+    let bodySize = 0;
     for await (const chunk of req) {
-      body += chunk;
+      const chunkBuffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      bodySize += chunkBuffer.length;
+      if (bodySize > MAX_BODY_SIZE) {
+        res.writeHead(413, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: `Request body too large (max ${MAX_BODY_SIZE} bytes)` }));
+        return;
+      }
+      bodyChunks.push(chunkBuffer);
     }
+    const body = Buffer.concat(bodyChunks).toString("utf8");
 
     let bodyData: any;
     try {
@@ -218,16 +228,37 @@ async function handleRequest(req: any, res: any): Promise<void> {
     const child = spawn(cmd[0], cmd.slice(1), { stdio: ["pipe", "pipe", "pipe"] });
     const stderrChunks: Buffer[] = [];
     child.stderr?.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
+    child.stdin?.on("error", (error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      stderrChunks.push(Buffer.from(message));
+    });
 
     // Write prompt to stdin to avoid E2BIG error
-    child.stdin.write(prompt);
-    child.stdin.end();
+    try {
+      child.stdin.write(prompt);
+      child.stdin.end();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      stderrChunks.push(Buffer.from(message));
+      terminateChild(child);
+    }
 
     if (!stream) {
       // Non-streaming: collect all output, parse JSON lines, extract thinking + content
       let thinkingContent = "";
       let assistantContent = "";
       let finalResult = "";
+      let finalized = false;
+
+      const finalizeJson = (payload: object) => {
+        if (finalized || res.writableEnded || res.destroyed) {
+          return;
+        }
+
+        finalized = true;
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(payload));
+      };
 
       const rl = createInterface({ input: child.stdout });
       
@@ -259,29 +290,34 @@ async function handleRequest(req: any, res: any): Promise<void> {
         }
       });
 
+      child.on("error", (error) => {
+        const rawError = error instanceof Error ? error.message : String(error);
+        const parsed = parseAgentError(rawError);
+        const userError = formatErrorForUser(parsed);
+        log.error("cursor-agent failed", { type: parsed.type, message: parsed.message });
+        rl.close();
+        finalizeJson(createChatCompletionResponse(model, userError));
+      });
+
       child.on("close", (code) => {
+        if (finalized) {
+          return;
+        }
+
         rl.close();
         const stderr = Buffer.concat(stderrChunks).toString().trim();
 
-        if (code !== 0 && stderr.length > 0) {
-          const parsed = parseAgentError(stderr);
+        if (code !== 0) {
+          const parsed = parseAgentError(stderr || `agent exited with code ${String(code)}`);
           const userError = formatErrorForUser(parsed);
           log.error("cursor-agent failed", { type: parsed.type, message: parsed.message });
-          const errorResponse = createChatCompletionResponse(model, userError);
-          res.writeHead(200, { "Content-Type": "application/json" });
-          res.end(JSON.stringify(errorResponse));
+          finalizeJson(createChatCompletionResponse(model, userError));
           return;
         }
 
         // Use finalResult if available, otherwise use accumulated assistantContent
         const content = finalResult || assistantContent || stderr;
-        const response = createChatCompletionResponse(
-          model, 
-          content, 
-          thinkingContent || undefined
-        );
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(response));
+        finalizeJson(createChatCompletionResponse(model, content, thinkingContent || undefined));
       });
     } else {
       // Streaming mode
@@ -295,6 +331,32 @@ async function handleRequest(req: any, res: any): Promise<void> {
       const created = Math.floor(Date.now() / 1000);
       let sentThinkingStart = false;
       let disconnected = false;
+      let streamDone = false;
+
+      const writeChunk = (payload: object) => {
+        if (disconnected || streamDone || res.writableEnded || res.destroyed) {
+          return;
+        }
+        res.write(`data: ${JSON.stringify(payload)}\n\n`);
+      };
+
+      const finishStream = () => {
+        if (disconnected || streamDone || res.writableEnded || res.destroyed) {
+          return;
+        }
+
+        streamDone = true;
+        const doneChunk = {
+          id,
+          object: "chat.completion.chunk",
+          created,
+          model,
+          choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+        };
+        res.write(`data: ${JSON.stringify(doneChunk)}\n\n`);
+        res.write("data: [DONE]\n\n");
+        res.end();
+      };
 
       const rl = createInterface({ input: child.stdout });
 
@@ -307,6 +369,7 @@ async function handleRequest(req: any, res: any): Promise<void> {
         req.off("aborted", handleDisconnect);
         res.off("close", handleDisconnect);
         rl.close();
+        streamDone = true;
         terminateChild(child);
       };
 
@@ -331,7 +394,7 @@ async function handleRequest(req: any, res: any): Promise<void> {
               choices: [
                 {
                   index: 0,
-                  delta: sentThinkingStart 
+                  delta: sentThinkingStart
                     ? { reasoning_content: data.text }
                     : { role: "assistant", reasoning_content: data.text },
                   finish_reason: null,
@@ -339,13 +402,16 @@ async function handleRequest(req: any, res: any): Promise<void> {
               ],
             };
             sentThinkingStart = true;
-            res.write(`data: ${JSON.stringify(chunkData)}\n\n`);
+            writeChunk(chunkData);
           } else if (data.type === "assistant" && data.message?.content && data.timestamp_ms) {
             // Send assistant content deltas (only partials with timestamp_ms)
             const content = data.message.content;
             if (Array.isArray(content)) {
               for (const part of content) {
                 if (part.type === "text" && part.text) {
+                  const delta = sentThinkingStart
+                    ? { content: part.text }
+                    : { role: "assistant", content: part.text };
                   const chunkData = {
                     id,
                     object: "chat.completion.chunk",
@@ -354,12 +420,13 @@ async function handleRequest(req: any, res: any): Promise<void> {
                     choices: [
                       {
                         index: 0,
-                        delta: { content: part.text },
+                        delta,
                         finish_reason: null,
                       },
                     ],
                   };
-                  res.write(`data: ${JSON.stringify(chunkData)}\n\n`);
+                  sentThinkingStart = true;
+                  writeChunk(chunkData);
                 }
               }
             }
@@ -367,6 +434,22 @@ async function handleRequest(req: any, res: any): Promise<void> {
         } catch {
           // Ignore non-JSON lines
         }
+      });
+
+      child.on("error", (error) => {
+        const rawError = error instanceof Error ? error.message : String(error);
+        const parsed = parseAgentError(rawError);
+        const userError = formatErrorForUser(parsed);
+        log.error("cursor-agent failed", { type: parsed.type, message: parsed.message });
+
+        writeChunk({
+          id,
+          object: "chat.completion.chunk",
+          created,
+          model,
+          choices: [{ index: 0, delta: { content: userError }, finish_reason: "stop" }],
+        });
+        finishStream();
       });
 
       child.on("close", (code) => {
@@ -380,28 +463,20 @@ async function handleRequest(req: any, res: any): Promise<void> {
 
         if (code !== 0) {
           const stderr = Buffer.concat(stderrChunks).toString().trim();
-          if (stderr) {
-            const errChunk = {
-              id,
-              object: "chat.completion.chunk",
-              created,
-              model,
-              choices: [{ index: 0, delta: { content: `Error: ${stderr}` }, finish_reason: "stop" }],
-            };
-            res.write(`data: ${JSON.stringify(errChunk)}\n\n`);
-          }
+          const parsed = parseAgentError(stderr || `agent exited with code ${String(code)}`);
+          const userError = formatErrorForUser(parsed);
+          log.error("cursor-agent failed", { type: parsed.type, message: parsed.message });
+
+          writeChunk({
+            id,
+            object: "chat.completion.chunk",
+            created,
+            model,
+            choices: [{ index: 0, delta: { content: userError }, finish_reason: "stop" }],
+          });
         }
 
-        const doneChunk = {
-          id,
-          object: "chat.completion.chunk",
-          created,
-          model,
-          choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
-        };
-        res.write(`data: ${JSON.stringify(doneChunk)}\n\n`);
-        res.write("data: [DONE]\n\n");
-        res.end();
+        finishStream();
       });
     }
   } catch (error) {
