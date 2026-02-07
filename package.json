@@ -1,5 +1,5 @@
 {
-  "name": "opencode-cursor",
+  "name": "@nomadcxx/opencode-cursor",
   "version": "2.1.0",
   "description": "OpenCode plugin for Cursor Agent via stdin (fixes E2BIG errors)",
   "type": "module",
@@ -35,5 +35,25 @@
     "@opencode-ai/sdk": "^1.0.0",
     "bun-types": "^1.1.0"
   },
-  "license": "ISC"
+  "license": "ISC",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Nomadcxx/opencode-cursor.git"
+  },
+  "homepage": "https://github.com/Nomadcxx/opencode-cursor#readme",
+  "bugs": {
+    "url": "https://github.com/Nomadcxx/opencode-cursor/issues"
+  },
+  "keywords": [
+    "opencode",
+    "cursor",
+    "ai",
+    "streaming",
+    "plugin",
+    "cursor-agent"
+  ],
+  "author": "Nomadcxx"
 }
