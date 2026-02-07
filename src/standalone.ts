@@ -8,7 +8,7 @@
  */
 
 import { createServer } from "http";
-import { spawn, execSync } from "child_process";
+import { spawn } from "child_process";
 import { createInterface } from "readline";
 import { createLogger } from "./utils/logger";
 import { parseAgentError, formatErrorForUser, stripAnsi } from "./utils/errors";
@@ -24,6 +24,15 @@ interface ChatMessage {
   content: string;
   reasoning_content?: string;
 }
+
+interface ModelInfo {
+  id: string;
+  object: string;
+  created: number;
+  owned_by: string;
+}
+
+const MODELS_TIMEOUT_MS = 30000;
 
 function createChatCompletionResponse(model: string, content: string, reasoningContent?: string) {
   const message: ChatMessage = { role: "assistant", content };
@@ -45,6 +54,79 @@ function createChatCompletionResponse(model: string, content: string, reasoningC
   };
 }
 
+function terminateChild(child: ReturnType<typeof spawn>): void {
+  if (child.exitCode !== null || child.killed) {
+    return;
+  }
+
+  child.kill("SIGTERM");
+  setTimeout(() => {
+    if (child.exitCode === null && !child.killed) {
+      child.kill("SIGKILL");
+    }
+  }, 1000);
+}
+
+function parseModelsOutput(output: string): ModelInfo[] {
+  const clean = stripAnsi(output);
+  const models: ModelInfo[] = [];
+
+  for (const line of clean.split("\n")) {
+    const match = line.match(/^([a-z0-9.-]+)\s+-\s+(.+?)(?:\s+\((current|default)\))*\s*$/i);
+    if (match) {
+      models.push({
+        id: match[1],
+        object: "model",
+        created: Math.floor(Date.now() / 1000),
+        owned_by: "cursor",
+      });
+    }
+  }
+
+  return models;
+}
+
+async function fetchModelsFromAgent(): Promise<ModelInfo[]> {
+  return await new Promise<ModelInfo[]>((resolve, reject) => {
+    const child = spawn("cursor-agent", ["models"], { stdio: ["ignore", "pipe", "pipe"] });
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
+    let timedOut = false;
+
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      terminateChild(child);
+    }, MODELS_TIMEOUT_MS);
+
+    child.stdout?.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
+    child.stderr?.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
+
+    child.on("error", (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+
+    child.on("close", (code) => {
+      clearTimeout(timeout);
+
+      if (timedOut) {
+        reject(new Error(`cursor-agent models timed out after ${MODELS_TIMEOUT_MS}ms`));
+        return;
+      }
+
+      const stdout = Buffer.concat(stdoutChunks).toString();
+      const stderr = Buffer.concat(stderrChunks).toString().trim();
+
+      if (code !== 0) {
+        reject(new Error(stderr || `cursor-agent models exited with code ${code}`));
+        return;
+      }
+
+      resolve(parseModelsOutput(stdout));
+    });
+  });
+}
+
 async function handleRequest(req: any, res: any): Promise<void> {
   try {
     const url = new URL(req.url || "/", `http://${req.headers.host}`);
@@ -59,20 +141,7 @@ async function handleRequest(req: any, res: any): Promise<void> {
     // Model discovery
     if (url.pathname === "/v1/models" || url.pathname === "/models") {
       try {
-        const output = execSync("cursor-agent models", { encoding: "utf-8", timeout: 30000 });
-        const clean = stripAnsi(output);
-        const models: Array<{ id: string; object: string; created: number; owned_by: string }> = [];
-        for (const line of clean.split("\n")) {
-          const match = line.match(/^([a-z0-9.-]+)\s+-\s+(.+?)(?:\s+\((current|default)\))*\s*$/i);
-          if (match) {
-            models.push({
-              id: match[1],
-              object: "model",
-              created: Math.floor(Date.now() / 1000),
-              owned_by: "cursor",
-            });
-          }
-        }
+        const models = await fetchModelsFromAgent();
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ object: "list", data: models }));
       } catch (err) {
@@ -95,7 +164,16 @@ async function handleRequest(req: any, res: any): Promise<void> {
       body += chunk;
     }
 
-    const bodyData: any = JSON.parse(body || "{}");
+    let bodyData: any;
+    try {
+      bodyData = JSON.parse(body || "{}");
+    } catch (error) {
+      const parseMessage = error instanceof Error ? error.message : String(error);
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: `Invalid JSON payload: ${parseMessage}` }));
+      return;
+    }
+
     const messages: Array<any> = Array.isArray(bodyData?.messages) ? bodyData.messages : [];
     const stream = bodyData?.stream === true;
 
@@ -138,6 +216,8 @@ async function handleRequest(req: any, res: any): Promise<void> {
     ];
 
     const child = spawn(cmd[0], cmd.slice(1), { stdio: ["pipe", "pipe", "pipe"] });
+    const stderrChunks: Buffer[] = [];
+    child.stderr?.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
 
     // Write prompt to stdin to avoid E2BIG error
     child.stdin.write(prompt);
@@ -148,7 +228,6 @@ async function handleRequest(req: any, res: any): Promise<void> {
       let thinkingContent = "";
       let assistantContent = "";
       let finalResult = "";
-      const stderrChunks: Buffer[] = [];
 
       const rl = createInterface({ input: child.stdout });
       
@@ -180,9 +259,8 @@ async function handleRequest(req: any, res: any): Promise<void> {
         }
       });
 
-      child.stderr.on("data", (chunk) => stderrChunks.push(chunk));
-
       child.on("close", (code) => {
+        rl.close();
         const stderr = Buffer.concat(stderrChunks).toString().trim();
 
         if (code !== 0 && stderr.length > 0) {
@@ -216,10 +294,30 @@ async function handleRequest(req: any, res: any): Promise<void> {
       const id = `cursor-acp-${Date.now()}`;
       const created = Math.floor(Date.now() / 1000);
       let sentThinkingStart = false;
+      let disconnected = false;
 
       const rl = createInterface({ input: child.stdout });
 
+      const handleDisconnect = () => {
+        if (disconnected) {
+          return;
+        }
+
+        disconnected = true;
+        req.off("aborted", handleDisconnect);
+        res.off("close", handleDisconnect);
+        rl.close();
+        terminateChild(child);
+      };
+
+      req.on("aborted", handleDisconnect);
+      res.on("close", handleDisconnect);
+
       rl.on("line", (line) => {
+        if (disconnected || res.writableEnded || res.destroyed) {
+          return;
+        }
+
         try {
           const data = JSON.parse(line);
 
@@ -272,22 +370,26 @@ async function handleRequest(req: any, res: any): Promise<void> {
       });
 
       child.on("close", (code) => {
+        req.off("aborted", handleDisconnect);
+        res.off("close", handleDisconnect);
+        rl.close();
+
+        if (disconnected || res.writableEnded || res.destroyed) {
+          return;
+        }
+
         if (code !== 0) {
-          const stderrChunks: Buffer[] = [];
-          child.stderr.on("data", (chunk) => stderrChunks.push(chunk));
-          child.stderr.on("end", () => {
-            const stderr = Buffer.concat(stderrChunks).toString();
-            if (stderr) {
-              const errChunk = {
-                id,
-                object: "chat.completion.chunk",
-                created,
-                model,
-                choices: [{ index: 0, delta: { content: `Error: ${stderr}` }, finish_reason: "stop" }],
-              };
-              res.write(`data: ${JSON.stringify(errChunk)}\n\n`);
-            }
-          });
+          const stderr = Buffer.concat(stderrChunks).toString().trim();
+          if (stderr) {
+            const errChunk = {
+              id,
+              object: "chat.completion.chunk",
+              created,
+              model,
+              choices: [{ index: 0, delta: { content: `Error: ${stderr}` }, finish_reason: "stop" }],
+            };
+            res.write(`data: ${JSON.stringify(errChunk)}\n\n`);
+          }
         }
 
         const doneChunk = {
