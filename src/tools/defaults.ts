@@ -43,7 +43,7 @@ export function registerDefaultTools(registry: ToolRegistry): void {
       });
       return stdout || stderr || "Command executed successfully";
     } catch (error: any) {
-      return `Error: ${error.message}`;
+      throw error;
     }
   });
 
@@ -88,7 +88,7 @@ export function registerDefaultTools(registry: ToolRegistry): void {
 
       return content;
     } catch (error: any) {
-      return `Error reading file: ${error.message}`;
+      throw error;
     }
   });
 
@@ -127,7 +127,7 @@ export function registerDefaultTools(registry: ToolRegistry): void {
       fs.writeFileSync(filePath, content, "utf-8");
       return `File written successfully: ${filePath}`;
     } catch (error: any) {
-      return `Error writing file: ${error.message}`;
+      throw error;
     }
   });
 
@@ -172,7 +172,7 @@ export function registerDefaultTools(registry: ToolRegistry): void {
 
       return `File edited successfully: ${path}`;
     } catch (error: any) {
-      return `Error editing file: ${error.message}`;
+      throw error;
     }
   });
 
@@ -217,7 +217,7 @@ export function registerDefaultTools(registry: ToolRegistry): void {
 
       return stdout || "No matches found";
     } catch (error: any) {
-      return `Error searching: ${error.message}`;
+      throw error;
     }
   });
 
@@ -253,7 +253,7 @@ export function registerDefaultTools(registry: ToolRegistry): void {
 
       return result.join("\n") || "Empty directory";
     } catch (error: any) {
-      return `Error listing directory: ${error.message}`;
+      throw error;
     }
   });
 
@@ -293,7 +293,7 @@ export function registerDefaultTools(registry: ToolRegistry): void {
 
       return stdout || "No files found";
     } catch (error: any) {
-      return `Error searching: ${error.message}`;
+      throw error;
     }
   });
 }
