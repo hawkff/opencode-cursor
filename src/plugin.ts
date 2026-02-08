@@ -14,6 +14,8 @@ import { parseAgentError, formatErrorForUser, stripAnsi } from "./utils/errors";
 import { OpenCodeToolDiscovery } from "./tools/discovery.js";
 import { toOpenAiParameters, describeTool } from "./tools/schema.js";
 import { ToolRouter } from "./tools/router.js";
+import { SkillLoader } from "./tools/skills/loader.js";
+import { SkillResolver } from "./tools/skills/resolver.js";
 import { createOpencodeClient } from "@opencode-ai/sdk";
 import { ToolRegistry as CoreRegistry } from "./tools/core/registry.js";
 import { LocalExecutor } from "./tools/executors/local.js";
@@ -712,10 +714,14 @@ export const CursorPlugin: Plugin = async ({ $, directory, client, serverUrl }: 
   if (mcpExec) executorChain.push(mcpExec);
 
   const toolsByName = new Map<string, any>();
+  const skillLoader = new SkillLoader();
+  let skillResolver: SkillResolver | null = null;
+
   const router = toolsEnabled
     ? new ToolRouter({
         execute: (toolId, args) => executeWithChain(executorChain, toolId, args),
         toolsByName,
+        resolveName: (name) => skillResolver?.resolve(name),
       })
     : null;
   let lastToolNames: string[] = [];
@@ -726,6 +732,10 @@ export const CursorPlugin: Plugin = async ({ $, directory, client, serverUrl }: 
     const list = await discovery.listTools();
     toolsByName.clear();
     list.forEach((t) => toolsByName.set(t.name, t));
+
+    // Load skills and initialize resolver for alias resolution
+    const skills = skillLoader.load(list);
+    skillResolver = new SkillResolver(skills);
 
     // Populate MCP executor with discovered SDK tool IDs
     if (mcpExec) {

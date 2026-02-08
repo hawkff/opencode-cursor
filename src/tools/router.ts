@@ -23,6 +23,7 @@ export interface ToolResultChunk {
 export interface RouterContext {
   execute: (toolId: string, args: Record<string, unknown>) => Promise<ExecutionResult>;
   toolsByName: Map<string, OpenCodeTool>;
+  resolveName?: (name: string) => string | undefined;
 }
 
 export class ToolRouter {
@@ -38,8 +39,16 @@ export class ToolRouter {
 
   async handleToolCall(event: ToolCallEvent, meta: { id: string; created: number; model: string }): Promise<ToolResultChunk | null> {
     const callId = event.call_id || event.tool_call_id || "unknown";
-    const name = event.name || this.inferName(event);
+    let name = event.name || this.inferName(event);
     if (!this.isOpenCodeTool(name)) return null;
+
+    // Resolve aliases via SkillResolver if configured
+    if (this.ctx.resolveName) {
+      const resolved = this.ctx.resolveName(name);
+      if (resolved) {
+        name = resolved;
+      }
+    }
 
     const tool = this.ctx.toolsByName.get(name);
     if (!tool) {
