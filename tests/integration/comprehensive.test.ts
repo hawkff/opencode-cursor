@@ -300,11 +300,11 @@ describe("Comprehensive End-to-End Integration", () => {
       expect(toolNames.length).toBe(7);
 
       for (const name of toolNames) {
-        const tool = registry.get(name);
+        const tool = registry.getTool(name);
         expect(tool).toBeDefined();
-        expect(tool?.definition.function.name).toBe(name);
-        expect(tool?.definition.function.description).toBeDefined();
-        expect(tool?.definition.function.parameters).toBeDefined();
+        expect(tool?.name).toBe(name);
+        expect(tool?.description).toBeDefined();
+        expect(tool?.parameters).toBeDefined();
       }
     });
 
