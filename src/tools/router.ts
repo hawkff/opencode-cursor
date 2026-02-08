@@ -52,11 +52,16 @@ export class ToolRouter {
 
     const tool = this.ctx.toolsByName.get(name);
     if (!tool) {
+      log.warn("Unknown tool call", { name });
       return this.buildResult(meta, callId, name, { status: "error", error: `Unknown tool ${name}` });
     }
 
     const args = this.extractArgs(event);
+    log.debug("Executing tool", { name, toolId: tool.id });
     const result = await this.ctx.execute(tool.id, args);
+    if (result.status === "error") {
+      log.warn("Tool execution returned error", { name, error: result.error });
+    }
     return this.buildResult(meta, callId, name, result);
   }
 
@@ -93,7 +98,7 @@ export class ToolRouter {
     };
 
     // OpenAI tool result convention: include output in a message? We'll place in a synthetic "content" string.
-    const content = result.status === "success" ? result.output ?? "" : `Error: ${result.error || "unknown"}`;
+    const content = result.status === "success" ? result.output ?? "" : (result.error || "unknown error");
 
     delta.tool_calls[0].function.arguments = JSON.stringify({ result: content }).slice(0, 8000); // guard size
 
