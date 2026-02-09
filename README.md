@@ -223,7 +223,7 @@ flowchart TB
 | **Error Parsing** |    ✓ (quota/auth/model)     |                                               ✗                                                |                                          ✗                                           |                              Debug logging                               |
 | **Installer**     |      ✓ TUI + one-liner      |                                               ✗                                                |                                          ✗                                           |                                    ✗                                     |
 | **OAuth Flow**    |   ✓ OpenCode integration    |                                            ✓ Native                                            |                                    Browser login                                     |                                 Keychain                                 |
-| **Tool Calling**  |      Via cursor-agent       |                                            ✓ Native                                            |                                    ✓ Experimental                                    |                                    ✗                                     |
+| **Tool Calling**  | ✓ Native (7 built-in + SDK/MCP) |                                            ✓ Native                                            |                                    ✓ Experimental                                    |                                    ✗                                     |
 | **Stability**     | Stable (uses official CLI)  |                                          Experimental                                          |                                        Stable                                        |                               Experimental                               |
 | **Dependencies**  |      bun, cursor-agent      |                                              npm                                               |                                  bun, cursor-agent                                   |                               Node.js 18+                                |
 | **Port**          |            32124            |                                             18741                                              |                                        32123                                         |                                   4141                                   |
@@ -234,6 +234,7 @@ flowchart TB
 - Structured error parsing with actionable suggestions
 - Cross-platform (not locked to macOS Keychain)
 - TUI installer for easy setup
+- Native tool calling with 7 built-in tools, SDK and MCP executor support, and a skills/alias system
 - Uses official cursor-agent CLI (more stable than reverse-engineering Connect-RPC)
 
 ## Prerequisites
