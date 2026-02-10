@@ -157,20 +157,39 @@ export function registerDefaultTools(registry: ToolRegistry): void {
     source: "local" as const
   }, async (args) => {
     const fs = await import("fs");
+    const path = await import("path");
     try {
-      const path = args.path as string;
+      const filePath = args.path as string;
       const oldString = args.old_string as string;
       const newString = args.new_string as string;
-      let content = fs.readFileSync(path, "utf-8");
+      let content = "";
+      try {
+        content = fs.readFileSync(filePath, "utf-8");
+      } catch (error: any) {
+        if (error?.code === "ENOENT") {
+          const dir = path.dirname(filePath);
+          if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+          }
+          fs.writeFileSync(filePath, newString, "utf-8");
+          return `File did not exist. Created and wrote content: ${filePath}`;
+        }
+        throw error;
+      }
+
+      if (!oldString) {
+        fs.writeFileSync(filePath, newString, "utf-8");
+        return `File edited successfully: ${filePath}`;
+      }
 
       if (!content.includes(oldString)) {
-        return `Error: Could not find the text to replace in ${path}`;
+        return `Error: Could not find the text to replace in ${filePath}`;
       }
 
       content = content.replaceAll(oldString, newString);
-      fs.writeFileSync(path, content, "utf-8");
+      fs.writeFileSync(filePath, content, "utf-8");
 
-      return `File edited successfully: ${path}`;
+      return `File edited successfully: ${filePath}`;
     } catch (error: any) {
       throw error;
     }
@@ -304,11 +323,98 @@ export function registerDefaultTools(registry: ToolRegistry): void {
       throw error;
     }
   });
+
+  // 8. Mkdir tool - Create directories
+  registry.register({
+    id: "mkdir",
+    name: "mkdir",
+    description: "Create a directory, including parent directories if needed",
+    parameters: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "Directory path to create"
+        }
+      },
+      required: ["path"]
+    },
+    source: "local" as const
+  }, async (args) => {
+    const { mkdir } = await import("fs/promises");
+    const { resolve } = await import("path");
+    const target = resolve(String(args.path));
+    await mkdir(target, { recursive: true });
+    return `Created directory: ${target}`;
+  });
+
+  // 9. Rm tool - Delete files/directories
+  registry.register({
+    id: "rm",
+    name: "rm",
+    description: "Delete a file or directory. Use force: true for non-empty directories.",
+    parameters: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "Path to delete"
+        },
+        force: {
+          type: "boolean",
+          description: "If true, recursively delete non-empty directories"
+        }
+      },
+      required: ["path"]
+    },
+    source: "local" as const
+  }, async (args) => {
+    const { rm, stat } = await import("fs/promises");
+    const { resolve } = await import("path");
+    const target = resolve(String(args.path));
+    const info = await stat(target);
+    if (info.isDirectory() && !args.force) {
+      throw new Error("Directory not empty. Use force: true to delete recursively.");
+    }
+    await rm(target, { recursive: !!args.force });
+    return `Deleted: ${target}`;
+  });
+
+  // 10. Stat tool - Get file/directory metadata
+  registry.register({
+    id: "stat",
+    name: "stat",
+    description: "Get file or directory information: size, type, permissions, timestamps",
+    parameters: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "Path to inspect"
+        }
+      },
+      required: ["path"]
+    },
+    source: "local" as const
+  }, async (args) => {
+    const { stat } = await import("fs/promises");
+    const { resolve } = await import("path");
+    const target = resolve(String(args.path));
+    const info = await stat(target);
+    return JSON.stringify({
+      path: target,
+      type: info.isDirectory() ? "directory" : info.isFile() ? "file" : "other",
+      size: info.size,
+      mode: info.mode.toString(8),
+      modified: info.mtime.toISOString(),
+      created: info.birthtime.toISOString(),
+    }, null, 2);
+  });
 }
 
 /**
  * Get the names of all default tools
  */
 export function getDefaultToolNames(): string[] {
-  return ["bash", "read", "write", "edit", "grep", "ls", "glob"];
+  return ["bash", "read", "write", "edit", "grep", "ls", "glob", "mkdir", "rm", "stat"];
 }

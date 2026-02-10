@@ -4,6 +4,7 @@ export type ErrorType = "quota" | "auth" | "network" | "model" | "unknown";
 
 export interface ParsedError {
   type: ErrorType;
+  recoverable: boolean;
   message: string;
   userMessage: string;
   details: Record<string, string>;
@@ -38,6 +39,7 @@ export function parseAgentError(stderr: string | unknown): ParsedError {
 
     return {
       type: "quota",
+      recoverable: false,
       message: clean,
       userMessage: "You've hit your Cursor usage limit",
       details,
@@ -49,6 +51,7 @@ export function parseAgentError(stderr: string | unknown): ParsedError {
   if (clean.includes("not logged in") || clean.includes("auth") || clean.includes("unauthorized")) {
     return {
       type: "auth",
+      recoverable: false,
       message: clean,
       userMessage: "Not authenticated with Cursor",
       details: {},
@@ -60,6 +63,7 @@ export function parseAgentError(stderr: string | unknown): ParsedError {
   if (clean.includes("ECONNREFUSED") || clean.includes("network") || clean.includes("fetch failed")) {
     return {
       type: "network",
+      recoverable: true,
       message: clean,
       userMessage: "Connection to Cursor failed",
       details: {},
@@ -79,6 +83,7 @@ export function parseAgentError(stderr: string | unknown): ParsedError {
 
     return {
       type: "model",
+      recoverable: false,
       message: clean,
       userMessage: modelMatch ? `Model '${modelMatch[1]}' not available` : "Requested model not available",
       details,
@@ -87,12 +92,21 @@ export function parseAgentError(stderr: string | unknown): ParsedError {
   }
 
   // Unknown error
+  const recoverable = clean.includes("timeout") || clean.includes("ETIMEDOUT");
   return {
     type: "unknown",
+    recoverable,
     message: clean,
     userMessage: clean.substring(0, 200) || "An error occurred",
     details: {},
   };
+}
+
+/**
+ * Check if an error is recoverable (worth retrying).
+ */
+export function isRecoverableError(error: ParsedError): boolean {
+  return error.recoverable;
 }
 
 /**

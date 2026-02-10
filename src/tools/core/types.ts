@@ -2,6 +2,7 @@ export interface ExecutionResult {
   status: "success" | "error";
   output?: string;
   error?: string;
+  errorType?: "recoverable" | "fatal";
 }
 
 export interface IToolExecutor {

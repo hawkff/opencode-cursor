@@ -5,12 +5,12 @@ import { executeWithChain } from "../../src/tools/core/executor.js";
 import { LocalExecutor } from "../../src/tools/executors/local.js";
 
 describe("Default Tools", () => {
-  it("should register all 7 default tools", () => {
+  it("should register all 10 default tools", () => {
     const registry = new ToolRegistry();
     registerDefaultTools(registry);
 
     const toolNames = getDefaultToolNames();
-    expect(toolNames).toHaveLength(7);
+    expect(toolNames).toHaveLength(10);
 
     for (const name of toolNames) {
       const tool = registry.getTool(name);
@@ -44,6 +44,18 @@ describe("Default Tools", () => {
 
     const glob = registry.getTool("glob");
     expect(glob?.name).toBe("glob");
+
+    const mkdir = registry.getTool("mkdir");
+    expect(mkdir?.name).toBe("mkdir");
+    expect(mkdir?.parameters.required).toContain("path");
+
+    const rm = registry.getTool("rm");
+    expect(rm?.name).toBe("rm");
+    expect(rm?.parameters.required).toContain("path");
+
+    const stat = registry.getTool("stat");
+    expect(stat?.name).toBe("stat");
+    expect(stat?.parameters.required).toContain("path");
   });
 
   it("should execute ls tool", async () => {
@@ -128,12 +140,36 @@ describe("Default Tools", () => {
     fs.unlinkSync(tmpFile);
   });
 
+  it("should create file when edit targets a missing path", async () => {
+    const registry = new ToolRegistry();
+    registerDefaultTools(registry);
+    const executor = new LocalExecutor(registry);
+
+    const fs = await import("fs");
+    const tmpFile = `/tmp/test-edit-missing-${Date.now()}.txt`;
+    if (fs.existsSync(tmpFile)) {
+      fs.unlinkSync(tmpFile);
+    }
+
+    const result = await executeWithChain([executor], "edit", {
+      path: tmpFile,
+      old_string: "anything",
+      new_string: "Created from edit fallback",
+    });
+
+    expect(result.status).toBe("success");
+    expect(result.output).toContain("Created and wrote content");
+    expect(fs.readFileSync(tmpFile, "utf-8")).toBe("Created from edit fallback");
+
+    fs.unlinkSync(tmpFile);
+  });
+
   it("should get all tool definitions", () => {
     const registry = new ToolRegistry();
     registerDefaultTools(registry);
 
     const tools = registry.list();
-    expect(tools).toHaveLength(7);
+    expect(tools).toHaveLength(10);
 
     // All should have required fields
     for (const tool of tools) {
@@ -218,6 +254,112 @@ describe("Default Tools", () => {
       }
       // Either way, no command injection occurred
     }
+  });
+
+  it("should execute mkdir tool", async () => {
+    const registry = new ToolRegistry();
+    registerDefaultTools(registry);
+    const executor = new LocalExecutor(registry);
+    const fs = await import("fs");
+
+    const tmpDir = `/tmp/test-mkdir-${Date.now()}/nested/deep`;
+
+    const result = await executeWithChain([executor], "mkdir", { path: tmpDir });
+    expect(result.status).toBe("success");
+    expect(result.output).toContain("Created directory");
+    expect(fs.existsSync(tmpDir)).toBe(true);
+
+    // Cleanup
+    fs.rmSync(`/tmp/test-mkdir-${Date.now().toString().slice(0, -3)}`, { recursive: true, force: true });
+    // Use the parent we know exists
+    const parent = tmpDir.split("/nested")[0];
+    fs.rmSync(parent, { recursive: true, force: true });
+  });
+
+  it("should execute rm tool on a file", async () => {
+    const registry = new ToolRegistry();
+    registerDefaultTools(registry);
+    const executor = new LocalExecutor(registry);
+    const fs = await import("fs");
+
+    const tmpFile = `/tmp/test-rm-${Date.now()}.txt`;
+    fs.writeFileSync(tmpFile, "delete me", "utf-8");
+
+    const result = await executeWithChain([executor], "rm", { path: tmpFile });
+    expect(result.status).toBe("success");
+    expect(result.output).toContain("Deleted");
+    expect(fs.existsSync(tmpFile)).toBe(false);
+  });
+
+  it("should refuse rm on directory without force", async () => {
+    const registry = new ToolRegistry();
+    registerDefaultTools(registry);
+    const executor = new LocalExecutor(registry);
+    const fs = await import("fs");
+
+    const tmpDir = `/tmp/test-rm-dir-${Date.now()}`;
+    fs.mkdirSync(tmpDir, { recursive: true });
+    fs.writeFileSync(`${tmpDir}/file.txt`, "content", "utf-8");
+
+    const result = await executeWithChain([executor], "rm", { path: tmpDir });
+    expect(result.status).toBe("error");
+
+    // Directory should still exist
+    expect(fs.existsSync(tmpDir)).toBe(true);
+
+    // Cleanup
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("should rm directory with force", async () => {
+    const registry = new ToolRegistry();
+    registerDefaultTools(registry);
+    const executor = new LocalExecutor(registry);
+    const fs = await import("fs");
+
+    const tmpDir = `/tmp/test-rm-force-${Date.now()}`;
+    fs.mkdirSync(tmpDir, { recursive: true });
+    fs.writeFileSync(`${tmpDir}/file.txt`, "content", "utf-8");
+
+    const result = await executeWithChain([executor], "rm", { path: tmpDir, force: true });
+    expect(result.status).toBe("success");
+    expect(result.output).toContain("Deleted");
+    expect(fs.existsSync(tmpDir)).toBe(false);
+  });
+
+  it("should execute stat tool", async () => {
+    const registry = new ToolRegistry();
+    registerDefaultTools(registry);
+    const executor = new LocalExecutor(registry);
+    const fs = await import("fs");
+
+    const tmpFile = `/tmp/test-stat-${Date.now()}.txt`;
+    fs.writeFileSync(tmpFile, "stat me", "utf-8");
+
+    const result = await executeWithChain([executor], "stat", { path: tmpFile });
+    expect(result.status).toBe("success");
+
+    const info = JSON.parse(result.output!);
+    expect(info.type).toBe("file");
+    expect(info.size).toBe(7); // "stat me" = 7 bytes
+    expect(info.modified).toBeDefined();
+    expect(info.created).toBeDefined();
+    expect(info.mode).toBeDefined();
+
+    // Cleanup
+    fs.unlinkSync(tmpFile);
+  });
+
+  it("should stat a directory", async () => {
+    const registry = new ToolRegistry();
+    registerDefaultTools(registry);
+    const executor = new LocalExecutor(registry);
+
+    const result = await executeWithChain([executor], "stat", { path: "/tmp" });
+    expect(result.status).toBe("success");
+
+    const info = JSON.parse(result.output!);
+    expect(info.type).toBe("directory");
   });
 
   it("should execute glob tool safely", async () => {

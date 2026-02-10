@@ -17,22 +17,25 @@ import { createCursorProvider } from "../../src/provider.js";
 describe("Competitive Edge Analysis", () => {
 
   describe("Feature Completeness", () => {
-    it("should have MORE tools than competitors (7 tools vs their 3-4)", () => {
+    it("should have MORE tools than competitors (10 tools vs their 3-4)", () => {
       const registry = new ToolRegistry();
       registerDefaultTools(registry);
 
       const toolCount = registry.list().length;
 
       // Competitors typically have: bash, read, write (3-4 tools)
-      // We have: bash, read, write, edit, grep, ls, glob (7 tools)
-      expect(toolCount).toBeGreaterThanOrEqual(7);
+      // We have: bash, read, write, edit, grep, ls, glob, mkdir, rm, stat (10 tools)
+      expect(toolCount).toBeGreaterThanOrEqual(10);
       expect(registry.getTool("bash")).toBeDefined();
       expect(registry.getTool("read")).toBeDefined();
       expect(registry.getTool("write")).toBeDefined();
-      expect(registry.getTool("edit")).toBeDefined(); // Many competitors lack this
-      expect(registry.getTool("grep")).toBeDefined(); // Many competitors lack this
-      expect(registry.getTool("ls")).toBeDefined();   // Many competitors lack this
-      expect(registry.getTool("glob")).toBeDefined(); // Many competitors lack this
+      expect(registry.getTool("edit")).toBeDefined();  // Many competitors lack this
+      expect(registry.getTool("grep")).toBeDefined();  // Many competitors lack this
+      expect(registry.getTool("ls")).toBeDefined();    // Many competitors lack this
+      expect(registry.getTool("glob")).toBeDefined();  // Many competitors lack this
+      expect(registry.getTool("mkdir")).toBeDefined(); // Filesystem management
+      expect(registry.getTool("rm")).toBeDefined();    // Filesystem management
+      expect(registry.getTool("stat")).toBeDefined();  // Filesystem management
     });
 
     it("should support BOTH proxy mode AND direct mode", () => {
@@ -178,6 +181,7 @@ describe("Competitive Edge Analysis", () => {
 
       expect(packageJson.scripts.discover).toBeDefined();
       expect(packageJson.bin).toBeDefined();
+      expect(packageJson.bin["open-cursor"]).toBeDefined();
       expect(packageJson.bin["cursor-discover"]).toBeDefined();
     });
   });
@@ -333,7 +337,7 @@ describe("Competitive Edge Analysis", () => {
     it("should have clear advantages in feature count", () => {
       const features = {
         // Our features
-        ourTools: 7,
+        ourTools: 10,
         ourModes: 2, // proxy + direct
         ourApis: 2, // OpenAI + native
         hasDiscovery: true,

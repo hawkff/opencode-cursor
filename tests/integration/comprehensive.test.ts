@@ -63,13 +63,16 @@ describe("Comprehensive End-to-End Integration", () => {
       const registry = new ToolRegistry();
       registerDefaultTools(registry);
 
-      expect(registry.list().length).toBe(7);
+      expect(registry.list().length).toBe(10);
       expect(registry.getTool("bash")).toBeDefined();
       expect(registry.getTool("read")).toBeDefined();
       expect(registry.getTool("write")).toBeDefined();
       expect(registry.getTool("edit")).toBeDefined();
       expect(registry.getTool("grep")).toBeDefined();
       expect(registry.getTool("ls")).toBeDefined();
+      expect(registry.getTool("mkdir")).toBeDefined();
+      expect(registry.getTool("rm")).toBeDefined();
+      expect(registry.getTool("stat")).toBeDefined();
       expect(registry.getTool("glob")).toBeDefined();
     });
   });
@@ -295,9 +298,9 @@ describe("Comprehensive End-to-End Integration", () => {
       const registry = new ToolRegistry();
       registerDefaultTools(registry);
 
-      // All 7 tools should be registered
+      // All 10 tools should be registered
       const toolNames = getDefaultToolNames();
-      expect(toolNames.length).toBe(7);
+      expect(toolNames.length).toBe(10);
 
       for (const name of toolNames) {
         const tool = registry.getTool(name);
