@@ -28,7 +28,8 @@
   "dependencies": {
     "ai": "^6.0.55",
     "@opencode-ai/plugin": "1.1.53",
-    "@opencode-ai/sdk": "1.1.53"
+    "@opencode-ai/sdk": "1.1.53",
+    "strip-ansi": "^7.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
