@@ -262,7 +262,7 @@ export function registerDefaultTools(registry: ToolRegistry): void {
 
       const stderr = typeof error?.stderr === "string" ? error.stderr : "";
       const isRegexSyntaxError = error.code === 2
-        && /(invalid regular expression|invalid repetition count|braces not balanced|repetition-operator operand invalid)/i.test(stderr);
+        && /(invalid regular expression|invalid repetition count|braces not balanced|repetition-operator operand invalid|unmatched(\s*\\?\{)?)/i.test(stderr);
 
       // BSD grep uses basic regex by default and can reject patterns that work in ERE.
       // Retry with -E so patterns like \$\{[A-Z_][A-Z0-9_]*:- are handled.
