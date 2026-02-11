@@ -75,14 +75,17 @@ describe("Default Tools", () => {
     const registry = new ToolRegistry();
     registerDefaultTools(registry);
     const executor = new LocalExecutor(registry);
+    const fs = await import("fs");
+    const os = await import("os");
+    const workdir = os.tmpdir();
 
     const result = await executeWithChain([executor], "bash", {
       cmd: "pwd",
-      workdir: "/tmp",
+      workdir,
     });
 
     expect(result.status).toBe("success");
-    expect(result.output?.trim()).toBe("/tmp");
+    expect(fs.realpathSync(result.output?.trim() ?? "")).toBe(fs.realpathSync(workdir));
   });
 
   it("should execute read tool", async () => {
