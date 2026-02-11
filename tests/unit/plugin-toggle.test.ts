@@ -24,11 +24,13 @@ describe("plugin toggle", () => {
   });
 
   it("resolves config from OPENCODE_CONFIG first", () => {
+    const customConfig = join(tmpdir(), "custom-opencode.json");
+    const xdgHome = join(tmpdir(), "xdg");
     const path = resolveOpenCodeConfigPath({
-      OPENCODE_CONFIG: "/tmp/custom-opencode.json",
-      XDG_CONFIG_HOME: "/tmp/xdg",
+      OPENCODE_CONFIG: customConfig,
+      XDG_CONFIG_HOME: xdgHome,
     });
-    expect(path).toBe("/tmp/custom-opencode.json");
+    expect(path).toBe(customConfig);
   });
 
   it("disables when config file exists and plugin array excludes cursor-acp", () => {
