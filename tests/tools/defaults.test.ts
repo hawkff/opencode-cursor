@@ -251,6 +251,28 @@ describe("Default Tools", () => {
     fs.unlinkSync(tmpFile);
   });
 
+  it("should retry grep with extended regex when BSD basic regex rejects pattern", async () => {
+    const registry = new ToolRegistry();
+    registerDefaultTools(registry);
+    const executor = new LocalExecutor(registry);
+
+    const fs = await import("fs");
+    const os = await import("os");
+    const path = await import("path");
+    const tmpFile = path.join(os.tmpdir(), `test-grep-bsd-${Date.now()}.txt`);
+    fs.writeFileSync(tmpFile, "export DEFAULT=${MY_VAR:-fallback}\n", "utf-8");
+
+    const result = await executeWithChain([executor], "grep", {
+      pattern: "\\$\\{[A-Z_][A-Z0-9_]*:-",
+      path: tmpFile,
+    });
+
+    expect(result.status).toBe("success");
+    expect(result.output).toContain("DEFAULT=${MY_VAR:-fallback}");
+
+    fs.unlinkSync(tmpFile);
+  });
+
   it("should prevent grep command injection via pattern", async () => {
     const registry = new ToolRegistry();
     registerDefaultTools(registry);

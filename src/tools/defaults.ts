@@ -247,14 +247,37 @@ export function registerDefaultTools(registry: ToolRegistry): void {
     }
     grepArgs.push(pattern, path);
 
+    const runGrep = async (extraArgs: string[] = []) => {
+      return execFileAsync("grep", [...extraArgs, ...grepArgs], { timeout: 30000 });
+    };
+
     try {
-      const { stdout } = await execFileAsync("grep", grepArgs, { timeout: 30000 });
+      const { stdout } = await runGrep();
       return stdout || "No matches found";
     } catch (error: any) {
       // grep exits with code 1 when no matches found — not an error
       if (error.code === 1) {
         return "No matches found";
       }
+
+      const stderr = typeof error?.stderr === "string" ? error.stderr : "";
+      const isRegexSyntaxError = error.code === 2
+        && /(invalid regular expression|invalid repetition count|braces not balanced|repetition-operator operand invalid|unmatched(\s*\\?\{)?)/i.test(stderr);
+
+      // BSD grep uses basic regex by default and can reject patterns that work in ERE.
+      // Retry with -E so patterns like \$\{[A-Z_][A-Z0-9_]*:- are handled.
+      if (isRegexSyntaxError) {
+        try {
+          const { stdout } = await runGrep(["-E"]);
+          return stdout || "No matches found";
+        } catch (extendedError: any) {
+          if (extendedError.code === 1) {
+            return "No matches found";
+          }
+          throw extendedError;
+        }
+      }
+
       throw error;
     }
   });
