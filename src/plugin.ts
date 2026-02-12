@@ -94,6 +94,8 @@ function isNonConfigPath(pathValue: string): boolean {
   return !isWithinPath(getOpenCodeConfigPrefix(), pathValue);
 }
 
+const SESSION_WORKSPACE_CACHE_LIMIT = 200;
+
 function resolveWorkspaceDirectory(worktree: string | undefined, directory: string | undefined): string {
   const envWorkspace = process.env.CURSOR_ACP_WORKSPACE?.trim();
   if (envWorkspace) {
@@ -1396,6 +1398,12 @@ function resolveToolContextBaseDirWithSession(
 
   const pinSession = (candidate: string) => {
     if (sessionID && sessionWorkspaceBySession && isNonConfigPath(candidate)) {
+      if (!sessionWorkspaceBySession.has(sessionID) && sessionWorkspaceBySession.size >= SESSION_WORKSPACE_CACHE_LIMIT) {
+        const oldestSession = sessionWorkspaceBySession.keys().next().value;
+        if (typeof oldestSession === "string") {
+          sessionWorkspaceBySession.delete(oldestSession);
+        }
+      }
       sessionWorkspaceBySession.set(sessionID, candidate);
     }
   };

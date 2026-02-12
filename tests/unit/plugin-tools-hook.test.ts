@@ -158,6 +158,7 @@ describe("Plugin tool hook", () => {
   it("pins non-config workspace per session and reuses it when later context loses worktree", async () => {
     const projectDir = mkdtempSync(join(tmpdir(), "plugin-hook-session-pin-project-"));
     const xdgConfigHome = mkdtempSync(join(tmpdir(), "plugin-hook-session-pin-xdg-"));
+    const unexpectedDir = mkdtempSync(join(tmpdir(), "plugin-hook-session-pin-unexpected-"));
     const prevXdg = process.env.XDG_CONFIG_HOME;
 
     try {
@@ -178,7 +179,7 @@ describe("Plugin tool hook", () => {
 
       const expectedFirstPath = join(projectDir, "nested/first.txt");
       const expectedSecondPath = join(projectDir, "nested/second.txt");
-      const unexpectedPath = join(process.cwd(), "nested/second.txt");
+      const unexpectedPath = join(unexpectedDir, "nested/second.txt");
 
       expect(readFileSync(expectedFirstPath, "utf-8")).toBe("first");
       expect(readFileSync(expectedSecondPath, "utf-8")).toBe("second");
@@ -193,6 +194,7 @@ describe("Plugin tool hook", () => {
       }
       rmSync(projectDir, { recursive: true, force: true });
       rmSync(xdgConfigHome, { recursive: true, force: true });
+      rmSync(unexpectedDir, { recursive: true, force: true });
     }
   });
 });
