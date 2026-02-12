@@ -3,7 +3,9 @@ set -e
 
 # OpenCode-Cursor one-line installer
 # Usage: curl -fsSL https://raw.githubusercontent.com/Nomadcxx/opencode-cursor/main/install.sh | bash
-# With Go: runs TUI installer. Without Go: runs shell-only install (bun + cursor-agent required).
+# Prefer npm if available (easiest upgrades). Otherwise:
+# - With Go: runs TUI installer from source.
+# - Without Go: runs shell-only install from source (bun + cursor-agent required).
 
 echo "OpenCode-Cursor Installer"
 echo "========================="
@@ -17,6 +19,47 @@ else
 fi
 PLUGIN_DIR="${CONFIG_HOME}/opencode/plugin"
 CONFIG_PATH="${CONFIG_HOME}/opencode/opencode.json"
+
+NPM_PKG="@rama_nigg/open-cursor"
+
+# If npm is available, install/upgrade the published package and run its installer.
+# This produces a plugin symlink pointing at the globally-installed package, so
+# upgrading later is just: npm update -g @rama_nigg/open-cursor
+if command -v npm &>/dev/null; then
+    echo "npm detected; installing via npm package (${NPM_PKG})..."
+    echo ""
+
+    npm install -g "${NPM_PKG}"
+
+    OPEN_CURSOR_BIN="$(command -v open-cursor || true)"
+    if [ -z "$OPEN_CURSOR_BIN" ]; then
+        PREFIX="$(npm prefix -g 2>/dev/null || true)"
+        if [ -n "$PREFIX" ] && [ -x "${PREFIX}/bin/open-cursor" ]; then
+            OPEN_CURSOR_BIN="${PREFIX}/bin/open-cursor"
+        fi
+    fi
+
+    if [ -z "$OPEN_CURSOR_BIN" ]; then
+        echo "Error: open-cursor binary not found after npm install."
+        echo "Try starting a new shell session, or run: npm bin -g"
+        exit 1
+    fi
+
+    "${OPEN_CURSOR_BIN}" install --config "${CONFIG_PATH}" --plugin-dir "${PLUGIN_DIR}" "$@"
+    EXIT_CODE=$?
+
+    echo ""
+    if [ $EXIT_CODE -eq 0 ]; then
+        echo "Installation complete via npm."
+        echo "To upgrade later:"
+        echo "  npm update -g ${NPM_PKG}"
+        echo "  open-cursor sync-models"
+    else
+        echo "Installation failed (exit code $EXIT_CODE)."
+    fi
+
+    exit $EXIT_CODE
+fi
 
 if command -v go &>/dev/null; then
     echo "Installing to: ${INSTALL_DIR}"

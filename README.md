@@ -15,19 +15,29 @@ No prompt limits. No broken streams. Full thinking + tool support in Opencode. Y
 curl -fsSL https://raw.githubusercontent.com/Nomadcxx/opencode-cursor/main/install.sh | bash
 ```
 
-**Option B: npm Package (Recommended for updates)**
+**Option B: npm Package (Use when published)**
+
+Check whether the package is available on npm first:
 
 ```bash
-npm install -g open-cursor
+npm view @rama_nigg/open-cursor version
+```
+
+If that returns a version, install with:
+
+```bash
+npm install -g @rama_nigg/open-cursor
 open-cursor install
 ```
 
 Upgrade later with:
 
 ```bash
-npm update -g open-cursor
+npm update -g @rama_nigg/open-cursor
 open-cursor sync-models
 ```
+
+If `npm view` returns `404 Not Found`, the release has not been published yet. Use Option A, C, or E.
 
 **Option C: TUI Installer**
 
@@ -281,6 +291,10 @@ Integration CI pins OpenCode-owned loop mode to deterministic settings:
 - `CURSOR_ACP_ENABLE_OPENCODE_TOOLS=true`
 - `CURSOR_ACP_FORWARD_TOOL_CALLS=false`
 - `CURSOR_ACP_EMIT_TOOL_UPDATES=false`
+
+## Publishing
+
+For maintainers, release and npm publish steps are documented in [docs/PUBLISHING.md](docs/PUBLISHING.md).
 
 ## Troubleshooting
 

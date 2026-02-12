@@ -1,5 +1,5 @@
 {
-  "name": "open-cursor",
+  "name": "@rama_nigg/open-cursor",
   "version": "2.1.2",
   "description": "No prompt limits. No broken streams. Full thinking + tool support. Your Cursor subscription, properly integrated.",
   "type": "module",
@@ -16,8 +16,8 @@
     "prepublishOnly": "bun run build"
   },
   "bin": {
-    "open-cursor": "./dist/cli/opencode-cursor.js",
-    "cursor-discover": "./dist/cli/discover.js"
+    "open-cursor": "dist/cli/opencode-cursor.js",
+    "cursor-discover": "dist/cli/discover.js"
   },
   "exports": {
     ".": "./dist/index.js"
@@ -42,7 +42,7 @@
   "license": "ISC",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Nomadcxx/opencode-cursor.git"
+    "url": "git+https://github.com/Nomadcxx/opencode-cursor.git"
   },
   "homepage": "https://github.com/Nomadcxx/opencode-cursor#readme",
   "bugs": {
