@@ -224,6 +224,7 @@ function indexToolLoopHistory(messages: Array<unknown>): {
   }
 
   for (const call of assistantCalls) {
+    const schemaSignature = deriveSchemaValidationSignature(call.name, call.argKeys);
     const errorClass = normalizeErrorClassForTool(
       call.name,
       byCallId.get(call.id) ?? latestByToolName.get(call.name) ?? latest ?? "unknown",
@@ -240,6 +241,14 @@ function indexToolLoopHistory(messages: Array<unknown>): {
       if (coarseSuccessFP) {
         incrementCount(initialCoarseCounts, coarseSuccessFP);
       }
+
+      if (schemaSignature) {
+        incrementCount(
+          initialValidationCounts,
+          `${call.name}|schema:${schemaSignature}|validation`,
+        );
+        incrementCount(initialValidationCoarseCounts, `${call.name}|validation`);
+      }
       continue;
     }
     const strictFingerprint = `${call.name}|${call.argShape}|${errorClass}`;
@@ -247,7 +256,6 @@ function indexToolLoopHistory(messages: Array<unknown>): {
     incrementCount(initialCounts, strictFingerprint);
     incrementCount(initialCoarseCounts, coarseFingerprint);
 
-    const schemaSignature = deriveSchemaValidationSignature(call.name, call.argKeys);
     if (!schemaSignature) {
       continue;
     }

@@ -361,7 +361,7 @@ describe("tool loop guard", () => {
     expect(d1.errorClass).toBe("success");
     expect(d1.triggered).toBe(false);
     expect(d2.triggered).toBe(false);
-    expect(d3.triggered).toBe(false);
+    expect(d3.triggered).toBe(true);
     expect(d4.triggered).toBe(true);
     expect(d4.fingerprint.includes("|path:")).toBe(true);
     expect(d4.fingerprint.endsWith("|success")).toBe(true);
