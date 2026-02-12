@@ -19,7 +19,17 @@ import {
   fallbackModels,
 } from "./model-discovery.js";
 
-type Command = "install" | "sync-models" | "uninstall" | "status" | "help";
+const BRANDING_HEADER = `
+ ▄▄▄  ▄▄▄▄  ▄▄▄▄▄ ▄▄  ▄▄      ▄▄▄  ▄▄ ▄▄ ▄▄▄▄   ▄▄▄▄   ▄▄▄   ▄▄▄▄
+██ ██ ██ ██ ██▄▄  ███▄██ ▄▄▄ ██ ▀▀ ██ ██ ██ ██ ██▄▄▄  ██ ██  ██ ██
+▀█▄█▀ ██▀▀  ██▄▄▄ ██ ▀██     ▀█▄█▀ ▀█▄█▀ ██▀█▄ ▄▄▄█▀  ▀█▄█▀  ██▀█▄
+`;
+
+export function getBrandingHeader(): string {
+  return BRANDING_HEADER.trim();
+}
+
+type Command = "install" | "sync-models" | "uninstall" | "status" | "doctor" | "help";
 
 type Options = {
   config?: string;
@@ -35,14 +45,25 @@ const DEFAULT_BASE_URL = "http://127.0.0.1:32124/v1";
 
 function printHelp() {
   const binName = basename(process.argv[1] || "open-cursor");
+  console.log(getBrandingHeader());
   console.log(`${binName}
 
-Usage:
-  ${binName} install [--config <path>] [--plugin-dir <path>] [--base-url <url>] [--copy] [--skip-models] [--no-backup]
-  ${binName} sync-models [--config <path>] [--no-backup]
-  ${binName} uninstall [--config <path>] [--plugin-dir <path>] [--no-backup]
-  ${binName} status [--config <path>] [--plugin-dir <path>]
-  ${binName} help
+Commands:
+  install     Configure OpenCode for Cursor (idempotent, safe to re-run)
+  sync-models Refresh model list from cursor-agent
+  status      Show current configuration state
+  doctor      Diagnose common issues
+  uninstall   Remove cursor-acp from OpenCode config
+  help        Show this help message
+
+Options:
+  --config <path>       Path to opencode.json (default: ~/.config/opencode/opencode.json)
+  --plugin-dir <path>   Path to plugin directory (default: ~/.config/opencode/plugin)
+  --base-url <url>      Proxy base URL (default: http://127.0.0.1:32124/v1)
+  --copy                Copy plugin instead of symlink
+  --skip-models         Skip model sync during install
+  --no-backup           Don't create config backup
+  --json                Output in JSON format (status command only)
 `);
 }
 
@@ -77,13 +98,14 @@ function parseArgs(argv: string[]): { command: Command; options: Options } {
 }
 
 function normalizeCommand(value: string | undefined): Command {
-  switch ((value || "install").toLowerCase()) {
+  switch ((value || "help").toLowerCase()) {
     case "install":
     case "sync-models":
     case "uninstall":
     case "status":
+    case "doctor":
     case "help":
-      return value ? (value.toLowerCase() as Command) : "install";
+      return value ? (value.toLowerCase() as Command) : "help";
     default:
       throw new Error(`Unknown command: ${value}`);
   }
@@ -302,6 +324,9 @@ function main() {
         return;
       case "status":
         commandStatus(parsed.options);
+        return;
+      case "doctor":
+        console.log("doctor command not yet implemented");
         return;
       case "help":
         printHelp();
