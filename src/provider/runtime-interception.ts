@@ -149,7 +149,7 @@ export async function handleToolLoopEventLegacy(
         toolSchemaMap,
       );
       if (reroutedWrite) {
-        log.info("Rerouting malformed edit call to write (legacy)", {
+        log.debug("Rerouting malformed edit call to write (legacy)", {
           path: reroutedWrite.path,
           missing: compat.validation.missing,
           typeErrors: compat.validation.typeErrors,
@@ -255,7 +255,7 @@ export async function handleToolLoopEventV1(
       ...(editDiag ? { editDiag } : {}),
     });
     if (compat.validation.hasSchema && !compat.validation.ok) {
-      log.warn("Tool schema compatibility validation failed", {
+      log.debug("Tool schema compatibility validation failed", {
         tool: interceptedToolCall.function.name,
         missing: compat.validation.missing,
         unexpected: compat.validation.unexpected,
@@ -281,7 +281,7 @@ export async function handleToolLoopEventV1(
         toolSchemaMap,
       );
       if (reroutedWrite) {
-        log.info("Rerouting malformed edit call to write", {
+        log.debug("Rerouting malformed edit call to write", {
           path: reroutedWrite.path,
           missing: compat.validation.missing,
           typeErrors: compat.validation.typeErrors,
