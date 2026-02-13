@@ -240,6 +240,44 @@ describe("provider runtime interception fallback", () => {
     expect(interceptedArgs).toContain("\"content\":\"hello\"");
   });
 
+  it("normalizes legacy arguments using schema compatibility before intercept", async () => {
+    let interceptedArgs = "";
+    const result = await handleToolLoopEventLegacy(
+      createBaseOptions({
+        event: {
+          type: "tool_call",
+          call_id: "c3-legacy",
+          tool_call: {
+            writeToolCall: {
+              args: { filePath: "foo.txt", contents: "hello" },
+            },
+          },
+        } as any,
+        allowedToolNames: new Set(["write"]),
+        toolSchemaMap: new Map([
+          [
+            "write",
+            {
+              type: "object",
+              properties: {
+                path: { type: "string" },
+                content: { type: "string" },
+              },
+              required: ["path", "content"],
+            },
+          ],
+        ]),
+        onInterceptedToolCall: async (toolCall) => {
+          interceptedArgs = toolCall.function.arguments;
+        },
+      }),
+    );
+
+    expect(result).toEqual({ intercepted: true, skipConverter: true });
+    expect(interceptedArgs).toContain("\"path\":\"foo.txt\"");
+    expect(interceptedArgs).toContain("\"content\":\"hello\"");
+  });
+
   it("repairs edit content payloads into canonical edit arguments in v1", async () => {
     let interceptedArgs = "";
     const toolResults: any[] = [];

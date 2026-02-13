@@ -28,6 +28,9 @@ const ARG_KEY_ALIASES = new Map<string, string>([
   ["terminalcommand", "command"],
   ["contents", "content"],
   ["text", "content"],
+  ["body", "content"],
+  ["data", "content"],
+  ["payload", "content"],
   ["streamcontent", "content"],
   ["recursive", "force"],
   ["oldstring", "old_string"],
@@ -210,6 +213,29 @@ function normalizeToolSpecificArgs(toolName: string, args: JsonRecord): JsonReco
       ...args,
       todos,
     };
+  }
+
+  if (normalizedToolName === "write") {
+    const normalized: JsonRecord = { ...args };
+
+    // Some model variants confuse write/edit and send edit-style payload keys.
+    // Map them into canonical write arguments before schema validation/sanitization.
+    if (normalized.content === undefined && normalized.new_string !== undefined) {
+      const coerced = coerceToString(normalized.new_string);
+      if (coerced !== null) {
+        normalized.content = coerced;
+      }
+      delete normalized.new_string;
+    }
+
+    if (normalized.content !== undefined && typeof normalized.content !== "string") {
+      const coerced = coerceToString(normalized.content);
+      if (coerced !== null) {
+        normalized.content = coerced;
+      }
+    }
+
+    return normalized;
   }
 
   if (normalizedToolName !== "edit" || !EDIT_COMPAT_REPAIR_ENABLED) {

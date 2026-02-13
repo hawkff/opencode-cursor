@@ -18,7 +18,8 @@ export function buildPromptFromMessages(messages: Array<any>, tools: Array<any>)
       })
       .join("\n");
     lines.push(
-      `SYSTEM: You have access to the following tools. When you need to use one, respond with a tool_call in the standard OpenAI format.\n\nAvailable tools:\n${toolDescs}`,
+      `SYSTEM: You have access to the following tools. When you need to use one, respond with a tool_call in the standard OpenAI format.\n` +
+        `Tool guidance: prefer write/edit for file changes; use bash mainly to run commands/tests.\n\nAvailable tools:\n${toolDescs}`,
     );
   }
 

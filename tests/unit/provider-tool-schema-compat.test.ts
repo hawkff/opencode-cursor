@@ -603,4 +603,75 @@ describe("tool schema compatibility", () => {
     expect(map.has("read")).toBe(true);
     expect(map.has("todowrite")).toBe(true);
   });
+
+  it("coerces non-string write content into a string", () => {
+    const result = applyToolSchemaCompat(
+      {
+        id: "w1",
+        type: "function",
+        function: {
+          name: "write",
+          arguments: JSON.stringify({
+            path: "/tmp/a.txt",
+            content: [{ text: "hello" }, { text: " world" }],
+          }),
+        },
+      },
+      new Map([
+        [
+          "write",
+          {
+            type: "object",
+            properties: {
+              path: { type: "string" },
+              content: { type: "string" },
+            },
+            required: ["path", "content"],
+            additionalProperties: false,
+          },
+        ],
+      ]),
+    );
+
+    const args = JSON.parse(result.toolCall.function.arguments);
+    expect(args.path).toBe("/tmp/a.txt");
+    expect(args.content).toBe("hello world");
+    expect(result.validation.ok).toBe(true);
+  });
+
+  it("repairs write new_string into content", () => {
+    const result = applyToolSchemaCompat(
+      {
+        id: "w2",
+        type: "function",
+        function: {
+          name: "write",
+          arguments: JSON.stringify({
+            path: "/tmp/b.txt",
+            new_string: "hello",
+          }),
+        },
+      },
+      new Map([
+        [
+          "write",
+          {
+            type: "object",
+            properties: {
+              path: { type: "string" },
+              content: { type: "string" },
+            },
+            required: ["path", "content"],
+            additionalProperties: false,
+          },
+        ],
+      ]),
+    );
+
+    const args = JSON.parse(result.toolCall.function.arguments);
+    expect(args.path).toBe("/tmp/b.txt");
+    expect(args.content).toBe("hello");
+    expect(args.new_string).toBeUndefined();
+    expect(result.validation.ok).toBe(true);
+  });
 });

@@ -102,7 +102,7 @@ export async function handleToolLoopEventLegacy(
     event,
     toolLoopMode,
     allowedToolNames,
-    toolSchemaMap: _toolSchemaMap,
+    toolSchemaMap,
     toolLoopGuard,
     toolMapper,
     toolSessionId,
@@ -121,11 +121,60 @@ export async function handleToolLoopEventLegacy(
       ? extractOpenAiToolCall(event as any, allowedToolNames)
       : null;
   if (interceptedToolCall) {
-    const termination = evaluateToolLoopGuard(toolLoopGuard, interceptedToolCall);
+    const compat = applyToolSchemaCompat(interceptedToolCall, toolSchemaMap);
+    let normalizedToolCall = compat.toolCall;
+    log.debug("Applied tool schema compatibility (legacy)", {
+      tool: normalizedToolCall.function.name,
+      originalArgKeys: compat.originalArgKeys,
+      normalizedArgKeys: compat.normalizedArgKeys,
+      collisionKeys: compat.collisionKeys,
+      validationOk: compat.validation.ok,
+    });
+
+    if (compat.validation.hasSchema && !compat.validation.ok) {
+      const validationTermination = evaluateSchemaValidationLoopGuard(
+        toolLoopGuard,
+        normalizedToolCall,
+        compat.validation,
+      );
+      if (validationTermination) {
+        return { intercepted: false, skipConverter: true, terminate: validationTermination };
+      }
+
+      const reroutedWrite = tryRerouteEditToWrite(
+        normalizedToolCall,
+        compat.normalizedArgs,
+        allowedToolNames,
+        toolSchemaMap,
+      );
+      if (reroutedWrite) {
+        log.info("Rerouting malformed edit call to write (legacy)", {
+          path: reroutedWrite.path,
+          missing: compat.validation.missing,
+          typeErrors: compat.validation.typeErrors,
+        });
+        normalizedToolCall = reroutedWrite.toolCall;
+      } else if (shouldEmitNonFatalSchemaValidationHint(normalizedToolCall, compat.validation)) {
+        const hintChunk = createNonFatalSchemaValidationHintChunk(
+          responseMeta,
+          normalizedToolCall,
+          compat.validation,
+        );
+        log.debug("Emitting non-fatal schema validation hint in legacy and skipping malformed tool execution", {
+          tool: normalizedToolCall.function.name,
+          missing: compat.validation.missing,
+          typeErrors: compat.validation.typeErrors,
+        });
+        await onToolResult(hintChunk);
+        return { intercepted: false, skipConverter: true };
+      }
+    }
+
+    const termination = evaluateToolLoopGuard(toolLoopGuard, normalizedToolCall);
     if (termination) {
       return { intercepted: false, skipConverter: true, terminate: termination };
     }
-    await onInterceptedToolCall(interceptedToolCall);
+    await onInterceptedToolCall(normalizedToolCall);
     return { intercepted: true, skipConverter: true };
   }
 

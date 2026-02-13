@@ -8,7 +8,7 @@ export function registerDefaultTools(registry: ToolRegistry): void {
   registry.register({
     id: "bash",
     name: "bash",
-    description: "Execute a shell command in a safe environment",
+    description: "Execute a shell command. Use this to run programs/tests; prefer write/edit for creating or modifying files.",
     parameters: {
       type: "object",
       properties: {
@@ -99,7 +99,7 @@ export function registerDefaultTools(registry: ToolRegistry): void {
   registry.register({
     id: "write",
     name: "write",
-    description: "Write content to a file (creates or overwrites)",
+    description: "Write content to a file (creates or overwrites). Prefer this over using bash redirection/heredocs for file creation.",
     parameters: {
       type: "object",
       properties: {
@@ -138,7 +138,7 @@ export function registerDefaultTools(registry: ToolRegistry): void {
   registry.register({
     id: "edit",
     name: "edit",
-    description: "Edit a file by replacing old text with new text",
+    description: "Edit a file by replacing old text with new text. Use for targeted replacements; use write to overwrite an entire file.",
     parameters: {
       type: "object",
       properties: {
