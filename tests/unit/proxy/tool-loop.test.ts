@@ -6,6 +6,17 @@ import {
   extractOpenAiToolCall,
 } from "../../../src/proxy/tool-loop.js";
 
+// Helper function to create tool call events
+function createToolCallEvent(toolName: string, args: Record<string, unknown>, callId = "call_test_123") {
+  return {
+    type: "tool_call",
+    tool_call: {
+      [toolName]: { args },
+    },
+    call_id: callId,
+  } as any;
+}
+
 describe("proxy/tool-loop", () => {
   it("extracts allowed names from OpenAI tools array", () => {
     const tools = [
@@ -37,11 +48,12 @@ describe("proxy/tool-loop", () => {
       },
     };
 
-    const call = extractOpenAiToolCall(event, new Set(["oc_read"]));
-    expect(call).not.toBeNull();
-    expect(call?.id).toBe("call_1");
-    expect(call?.function.name).toBe("oc_read");
-    expect(call?.function.arguments).toBe("{\"path\":\"/tmp/hello.txt\"}");
+    const result = extractOpenAiToolCall(event, new Set(["oc_read"]));
+    expect(result.action).toBe("intercept");
+    expect(result.toolCall).toBeDefined();
+    expect(result.toolCall?.id).toBe("call_1");
+    expect(result.toolCall?.function.name).toBe("oc_read");
+    expect(result.toolCall?.function.arguments).toBe("{\"path\":\"/tmp/hello.txt\"}");
   });
 
   it("normalizes *ToolCall names from cursor events", () => {
@@ -55,10 +67,10 @@ describe("proxy/tool-loop", () => {
       },
     };
 
-    const call = extractOpenAiToolCall(event, new Set(["read"]));
-    expect(call).not.toBeNull();
-    expect(call?.function.name).toBe("read");
-    expect(call?.function.arguments).toBe("{\"path\":\"foo.txt\"}");
+    const result = extractOpenAiToolCall(event, new Set(["read"]));
+    expect(result.action).toBe("intercept");
+    expect(result.toolCall?.function.name).toBe("read");
+    expect(result.toolCall?.function.arguments).toBe("{\"path\":\"foo.txt\"}");
   });
 
   it("extracts args from flat payload without args wrapper", () => {
@@ -73,10 +85,10 @@ describe("proxy/tool-loop", () => {
       },
     };
 
-    const call = extractOpenAiToolCall(event, new Set(["edit"]));
-    expect(call).not.toBeNull();
-    expect(call?.function.name).toBe("edit");
-    expect(call?.function.arguments).toBe("{\"path\":\"test.md\",\"streamContent\":\"hello\"}");
+    const result = extractOpenAiToolCall(event, new Set(["edit"]));
+    expect(result.action).toBe("intercept");
+    expect(result.toolCall?.function.name).toBe("edit");
+    expect(result.toolCall?.function.arguments).toBe("{\"path\":\"test.md\",\"streamContent\":\"hello\"}");
   });
 
   it("skips result-only tool_call payloads without args", () => {
@@ -93,11 +105,12 @@ describe("proxy/tool-loop", () => {
       },
     };
 
-    const call = extractOpenAiToolCall(event, new Set(["edit"]));
-    expect(call).toBeNull();
+    const result = extractOpenAiToolCall(event, new Set(["edit"]));
+    expect(result.action).toBe("skip");
+    expect(result.skipReason).toBe("event_skipped");
   });
 
-  it("ignores tool calls not present in allowed names", () => {
+  it("returns passthrough for tool calls not present in allowed names", () => {
     const event: any = {
       type: "tool_call",
       call_id: "call_3",
@@ -109,8 +122,9 @@ describe("proxy/tool-loop", () => {
       },
     };
 
-    const call = extractOpenAiToolCall(event, new Set(["oc_other"]));
-    expect(call).toBeNull();
+    const result = extractOpenAiToolCall(event, new Set(["oc_other"]));
+    expect(result.action).toBe("passthrough");
+    expect(result.passthroughName).toBe("oc_brainstorm");
   });
 
   it("maps updateTodos alias to allowed todowrite tool name", () => {
@@ -125,9 +139,9 @@ describe("proxy/tool-loop", () => {
       },
     };
 
-    const call = extractOpenAiToolCall(event, new Set(["todowrite"]));
-    expect(call).not.toBeNull();
-    expect(call?.function.name).toBe("todowrite");
+    const result = extractOpenAiToolCall(event, new Set(["todowrite"]));
+    expect(result.action).toBe("intercept");
+    expect(result.toolCall?.function.name).toBe("todowrite");
   });
 
   it("maps executeCommand alias to allowed bash tool name", () => {
@@ -142,9 +156,9 @@ describe("proxy/tool-loop", () => {
       },
     };
 
-    const call = extractOpenAiToolCall(event, new Set(["bash"]));
-    expect(call).not.toBeNull();
-    expect(call?.function.name).toBe("bash");
+    const result = extractOpenAiToolCall(event, new Set(["bash"]));
+    expect(result.action).toBe("intercept");
+    expect(result.toolCall?.function.name).toBe("bash");
   });
 
   it("maps shell alias to allowed bash tool name", () => {
@@ -159,9 +173,9 @@ describe("proxy/tool-loop", () => {
       },
     };
 
-    const call = extractOpenAiToolCall(event, new Set(["bash"]));
-    expect(call).not.toBeNull();
-    expect(call?.function.name).toBe("bash");
+    const result = extractOpenAiToolCall(event, new Set(["bash"]));
+    expect(result.action).toBe("intercept");
+    expect(result.toolCall?.function.name).toBe("bash");
   });
 
   it("maps createDirectory alias to allowed mkdir tool name", () => {
@@ -176,9 +190,9 @@ describe("proxy/tool-loop", () => {
       },
     };
 
-    const call = extractOpenAiToolCall(event, new Set(["mkdir"]));
-    expect(call).not.toBeNull();
-    expect(call?.function.name).toBe("mkdir");
+    const result = extractOpenAiToolCall(event, new Set(["mkdir"]));
+    expect(result.action).toBe("intercept");
+    expect(result.toolCall?.function.name).toBe("mkdir");
   });
 
   it("maps deleteFile alias to allowed rm tool name", () => {
@@ -193,9 +207,9 @@ describe("proxy/tool-loop", () => {
       },
     };
 
-    const call = extractOpenAiToolCall(event, new Set(["rm"]));
-    expect(call).not.toBeNull();
-    expect(call?.function.name).toBe("rm");
+    const result = extractOpenAiToolCall(event, new Set(["rm"]));
+    expect(result.action).toBe("intercept");
+    expect(result.toolCall?.function.name).toBe("rm");
   });
 
   it("maps findFiles alias to allowed glob tool name", () => {
@@ -210,9 +224,9 @@ describe("proxy/tool-loop", () => {
       },
     };
 
-    const call = extractOpenAiToolCall(event, new Set(["glob"]));
-    expect(call).not.toBeNull();
-    expect(call?.function.name).toBe("glob");
+    const result = extractOpenAiToolCall(event, new Set(["glob"]));
+    expect(result.action).toBe("intercept");
+    expect(result.toolCall?.function.name).toBe("glob");
   });
 
   it("maps callOmoAgent alias to allowed call_omo_agent tool name", () => {
@@ -227,9 +241,9 @@ describe("proxy/tool-loop", () => {
       },
     };
 
-    const call = extractOpenAiToolCall(event, new Set(["call_omo_agent"]));
-    expect(call).not.toBeNull();
-    expect(call?.function.name).toBe("call_omo_agent");
+    const result = extractOpenAiToolCall(event, new Set(["call_omo_agent"]));
+    expect(result.action).toBe("intercept");
+    expect(result.toolCall?.function.name).toBe("call_omo_agent");
   });
 
   it("maps delegateTask alias to allowed task tool name", () => {
@@ -244,9 +258,9 @@ describe("proxy/tool-loop", () => {
       },
     };
 
-    const call = extractOpenAiToolCall(event, new Set(["task"]));
-    expect(call).not.toBeNull();
-    expect(call?.function.name).toBe("task");
+    const result = extractOpenAiToolCall(event, new Set(["task"]));
+    expect(result.action).toBe("intercept");
+    expect(result.toolCall?.function.name).toBe("task");
   });
 
   it("maps runSkill alias to allowed skill tool name", () => {
@@ -261,9 +275,9 @@ describe("proxy/tool-loop", () => {
       },
     };
 
-    const call = extractOpenAiToolCall(event, new Set(["skill"]));
-    expect(call).not.toBeNull();
-    expect(call?.function.name).toBe("skill");
+    const result = extractOpenAiToolCall(event, new Set(["skill"]));
+    expect(result.action).toBe("intercept");
+    expect(result.toolCall?.function.name).toBe("skill");
   });
 
   it("maps skillMcp alias to allowed skill_mcp tool name", () => {
@@ -278,9 +292,9 @@ describe("proxy/tool-loop", () => {
       },
     };
 
-    const call = extractOpenAiToolCall(event, new Set(["skill_mcp"]));
-    expect(call).not.toBeNull();
-    expect(call?.function.name).toBe("skill_mcp");
+    const result = extractOpenAiToolCall(event, new Set(["skill_mcp"]));
+    expect(result.action).toBe("intercept");
+    expect(result.toolCall?.function.name).toBe("skill_mcp");
   });
 
   it("builds valid non-stream tool call response", () => {
@@ -319,5 +333,107 @@ describe("proxy/tool-loop", () => {
     expect(chunks[0].choices[0].delta.tool_calls[0].function.name).toBe("oc_write");
     expect(chunks[0].choices[0].finish_reason).toBeNull();
     expect(chunks[1].choices[0].finish_reason).toBe("tool_calls");
+  });
+});
+
+describe("extractOpenAiToolCall with pass-through", () => {
+  const allowedTools = new Set(["bash", "read", "write"]);
+
+  it("should return intercept action for known tools", () => {
+    const event = createToolCallEvent("bash", { command: "ls" });
+
+    const result = extractOpenAiToolCall(event, allowedTools);
+
+    expect(result.action).toBe("intercept");
+    expect(result.toolCall).toBeDefined();
+    expect(result.toolCall!.function.name).toBe("bash");
+  });
+
+  it("should return intercept action for aliased tools", () => {
+    const event = createToolCallEvent("runcommand", { command: "ls" });
+
+    const result = extractOpenAiToolCall(event, allowedTools);
+
+    expect(result.action).toBe("intercept");
+    expect(result.toolCall!.function.name).toBe("bash");
+  });
+
+  it("should return passthrough action for unknown tools", () => {
+    const event = createToolCallEvent("browser_navigate", { url: "https://example.com" });
+
+    const result = extractOpenAiToolCall(event, allowedTools);
+
+    expect(result.action).toBe("passthrough");
+    expect(result.passthroughName).toBe("browser_navigate");
+    expect(result.toolCall).toBeUndefined();
+  });
+
+  it("should return skip action when allowedToolNames is empty", () => {
+    const event = createToolCallEvent("bash", { command: "ls" });
+
+    const result = extractOpenAiToolCall(event, new Set());
+
+    expect(result.action).toBe("skip");
+    expect(result.skipReason).toBe("no_allowed_tools");
+  });
+
+  it("should return skip action when no name can be extracted", () => {
+    const event = { tool_call: {} } as any;
+
+    const result = extractOpenAiToolCall(event, allowedTools);
+
+    expect(result.action).toBe("skip");
+    expect(result.skipReason).toBe("no_name");
+  });
+});
+
+describe("extractOpenAiToolCall with pass-through", () => {
+  const allowedTools = new Set(["bash", "read", "write"]);
+
+  it("should return intercept action for known tools", () => {
+    const event = createToolCallEvent("bash", { command: "ls" });
+
+    const result = extractOpenAiToolCall(event, allowedTools);
+
+    expect(result.action).toBe("intercept");
+    expect(result.toolCall).toBeDefined();
+    expect(result.toolCall!.function.name).toBe("bash");
+  });
+
+  it("should return intercept action for aliased tools", () => {
+    const event = createToolCallEvent("runcommand", { command: "ls" });
+
+    const result = extractOpenAiToolCall(event, allowedTools);
+
+    expect(result.action).toBe("intercept");
+    expect(result.toolCall!.function.name).toBe("bash");
+  });
+
+  it("should return passthrough action for unknown tools", () => {
+    const event = createToolCallEvent("browser_navigate", { url: "https://example.com" });
+
+    const result = extractOpenAiToolCall(event, allowedTools);
+
+    expect(result.action).toBe("passthrough");
+    expect(result.passthroughName).toBe("browser_navigate");
+    expect(result.toolCall).toBeUndefined();
+  });
+
+  it("should return skip action when allowedToolNames is empty", () => {
+    const event = createToolCallEvent("bash", { command: "ls" });
+
+    const result = extractOpenAiToolCall(event, new Set());
+
+    expect(result.action).toBe("skip");
+    expect(result.skipReason).toBe("no_allowed_tools");
+  });
+
+  it("should return skip action when no name can be extracted", () => {
+    const event = { tool_call: {} } as any;
+
+    const result = extractOpenAiToolCall(event, allowedTools);
+
+    expect(result.action).toBe("skip");
+    expect(result.skipReason).toBe("no_name");
   });
 });

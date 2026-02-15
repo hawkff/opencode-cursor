@@ -12,6 +12,13 @@ export interface OpenAiToolCall {
   };
 }
 
+export interface ToolCallExtractionResult {
+  action: "intercept" | "passthrough" | "skip";
+  toolCall?: OpenAiToolCall;
+  passthroughName?: string;
+  skipReason?: string;
+}
+
 export interface ToolLoopMeta {
   id: string;
   created: number;
@@ -106,48 +113,55 @@ export function extractAllowedToolNames(tools: Array<any>): Set<string> {
 export function extractOpenAiToolCall(
   event: StreamJsonToolCallEvent,
   allowedToolNames: Set<string>,
-): OpenAiToolCall | null {
+): ToolCallExtractionResult {
   if (allowedToolNames.size === 0) {
-    return null;
+    return { action: "skip", skipReason: "no_allowed_tools" };
   }
 
   const { name, args, skipped } = extractToolNameAndArgs(event);
   if (skipped) {
-    return null;
+    return { action: "skip", skipReason: "event_skipped" };
   }
   if (!name) {
-    return null;
+    return { action: "skip", skipReason: "no_name" };
   }
 
   const resolvedName = resolveAllowedToolName(name, allowedToolNames);
-  if (!resolvedName) {
-    log.debug("Tool call name not allowed; skipping interception", {
-      name,
-      normalized: normalizeAliasKey(name),
-      allowedToolCount: allowedToolNames.size,
-      aliasTarget: TOOL_NAME_ALIASES.get(normalizeAliasKey(name)) ?? null,
-    });
-    return null;
+  if (resolvedName) {
+    // Known tool → intercept and forward to OpenCode
+    if (args === undefined && event.subtype === "started") {
+      log.debug("Tool call args extraction returned undefined", {
+        toolName: name,
+        subtype: event.subtype ?? "none",
+        payloadKeys: Object.entries(event.tool_call || {}).map(([k, v]) =>
+          `${k}:[${isRecord(v) ? Object.keys(v).join(",") : typeof v}]`),
+        hasCallId: Boolean(event.call_id),
+      });
+    }
+
+    const callId = event.call_id || (event as any).tool_call_id || "call_unknown";
+    return {
+      action: "intercept",
+      toolCall: {
+        id: callId,
+        type: "function",
+        function: {
+          name: resolvedName,
+          arguments: toOpenAiArguments(args),
+        },
+      },
+    };
   }
 
-  if (args === undefined && event.subtype === "started") {
-    log.debug("Tool call args extraction returned undefined", {
-      toolName: name,
-      subtype: event.subtype ?? "none",
-      payloadKeys: Object.entries(event.tool_call || {}).map(([k, v]) =>
-        `${k}:[${isRecord(v) ? Object.keys(v).join(",") : typeof v}]`),
-      hasCallId: Boolean(event.call_id),
-    });
-  }
-
-  const callId = event.call_id || (event as any).tool_call_id || "call_unknown";
+  // Unknown tool → pass through to cursor-agent
+  log.debug("Tool call not in allowlist; passing through to cursor-agent", {
+    name,
+    normalized: normalizeAliasKey(name),
+    allowedToolCount: allowedToolNames.size,
+  });
   return {
-    id: callId,
-    type: "function",
-    function: {
-      name: resolvedName,
-      arguments: toOpenAiArguments(args),
-    },
+    action: "passthrough",
+    passthroughName: name,
   };
 }
 
