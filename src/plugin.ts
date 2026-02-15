@@ -40,6 +40,8 @@ import {
   type ToolOptionResolution,
 } from "./provider/boundary.js";
 import { handleToolLoopEventWithFallback } from "./provider/runtime-interception.js";
+import { PassThroughTracker } from "./provider/passthrough-tracker.js";
+import { toastService } from "./services/toast-service.js";
 import { buildToolSchemaMap } from "./provider/tool-schema-compat.js";
 import {
   createToolLoopGuard,
@@ -710,6 +712,7 @@ async function ensureCursorProxyServer(workspaceDirectory: string, toolRouter?: 
       const perf = new RequestPerf(id);
       const toolMapper = new ToolMapper();
       const toolSessionId = id;
+      const passThroughTracker = new PassThroughTracker();
 
       perf.mark("spawn");
       const sse = new ReadableStream({
@@ -788,6 +791,7 @@ async function ensureCursorProxyServer(workspaceDirectory: string, toolRouter?: 
                     suppressConverterToolEvents: SUPPRESS_CONVERTER_TOOL_EVENTS,
                     toolRouter,
                     responseMeta: { id, created, model },
+                    passThroughTracker,
                     onToolUpdate: (update) => {
                       controller.enqueue(encoder.encode(formatToolUpdateEvent(update)));
                     },
@@ -852,6 +856,7 @@ async function ensureCursorProxyServer(workspaceDirectory: string, toolRouter?: 
                   suppressConverterToolEvents: SUPPRESS_CONVERTER_TOOL_EVENTS,
                   toolRouter,
                   responseMeta: { id, created, model },
+                  passThroughTracker,
                   onToolUpdate: (update) => {
                     controller.enqueue(encoder.encode(formatToolUpdateEvent(update)));
                   },
@@ -910,6 +915,16 @@ async function ensureCursorProxyServer(workspaceDirectory: string, toolRouter?: 
             log.debug("cursor-agent completed (bun stream)", {
               exitCode,
             });
+
+            // Emit toast for passed-through MCP tools
+            const passThroughSummary = passThroughTracker.getSummary();
+            if (passThroughSummary.hasActivity) {
+              await toastService.showPassThroughSummary(passThroughSummary.tools);
+            }
+            if (passThroughSummary.errors.length > 0) {
+              await toastService.showErrorSummary(passThroughSummary.errors);
+            }
+
             const doneChunk = createChatCompletionChunk(id, created, model, "", true);
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(doneChunk)}\n\n`));
             controller.enqueue(encoder.encode(formatSseDone()));
@@ -1164,6 +1179,7 @@ async function ensureCursorProxyServer(workspaceDirectory: string, toolRouter?: 
         const lineBuffer = new LineBuffer();
         const toolMapper = new ToolMapper();
         const toolSessionId = id;
+        const passThroughTracker = new PassThroughTracker();
         const stderrChunks: Buffer[] = [];
         let streamTerminated = false;
         let firstTokenReceived = false;
@@ -1257,6 +1273,7 @@ async function ensureCursorProxyServer(workspaceDirectory: string, toolRouter?: 
                 suppressConverterToolEvents: SUPPRESS_CONVERTER_TOOL_EVENTS,
                 toolRouter,
                 responseMeta: { id, created, model },
+                passThroughTracker,
                 onToolUpdate: (update) => {
                   res.write(formatToolUpdateEvent(update));
                 },
@@ -1327,6 +1344,7 @@ async function ensureCursorProxyServer(workspaceDirectory: string, toolRouter?: 
                 suppressConverterToolEvents: SUPPRESS_CONVERTER_TOOL_EVENTS,
                 toolRouter,
                 responseMeta: { id, created, model },
+                passThroughTracker,
                 onToolUpdate: (update) => {
                   res.write(formatToolUpdateEvent(update));
                 },
@@ -1388,6 +1406,15 @@ async function ensureCursorProxyServer(workspaceDirectory: string, toolRouter?: 
             streamTerminated = true;
             res.end();
             return;
+          }
+
+          // Emit toast for passed-through MCP tools
+          const passThroughSummary = passThroughTracker.getSummary();
+          if (passThroughSummary.hasActivity) {
+            await toastService.showPassThroughSummary(passThroughSummary.tools);
+          }
+          if (passThroughSummary.errors.length > 0) {
+            await toastService.showErrorSummary(passThroughSummary.errors);
           }
 
           const doneChunk = {
@@ -1707,6 +1734,12 @@ export const CursorPlugin: Plugin = async ({ $, directory, worktree, client, ser
     toolLoopMaxRepeat: TOOL_LOOP_MAX_REPEAT,
   });
   await ensurePluginDirectory();
+
+  // Initialize toast service for MCP pass-through notifications
+  toastService.setClient(client);
+
+  // Initialize toast service for MCP pass-through notifications
+  toastService.setClient(client);
 
   // Tools (skills) discovery/execution wiring
   const toolsEnabled = process.env.CURSOR_ACP_ENABLE_OPENCODE_TOOLS !== "false"; // default ON
