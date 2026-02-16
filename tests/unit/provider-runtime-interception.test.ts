@@ -577,19 +577,37 @@ describe("provider runtime interception fallback", () => {
 
   it("does not fallback on success loop-guard termination; returns terminal response", async () => {
     let fallbackCalled = false;
+    // Use 'edit' instead of 'read' - exploration tools have 5x limit multiplier
+    const editArgs = "{\"path\":\"foo.txt\",\"old_string\":\"a\",\"new_string\":\"b\"}";
     const guard = createToolLoopGuard(
       [{ role: "tool", tool_call_id: "c1", content: "{\"success\":true}" }],
       1,
     );
+    // Pre-trigger guard: repeatCount=2 > maxRepeat=1
     guard.evaluate({
       id: "c1",
       type: "function",
-      function: { name: "read", arguments: "{\"path\":\"foo.txt\"}" },
+      function: { name: "edit", arguments: editArgs },
+    });
+    guard.evaluate({
+      id: "c2",
+      type: "function",
+      function: { name: "edit", arguments: editArgs },
     });
 
     const result = await handleToolLoopEventWithFallback({
       ...createBaseOptions({
         toolLoopGuard: guard,
+        event: {
+          type: "tool_call",
+          call_id: "c3",
+          tool_call: {
+            editToolCall: {
+              args: { path: "foo.txt", old_string: "a", new_string: "b" },
+            },
+          },
+        } as any,
+        allowedToolNames: new Set(["edit"]),
       }),
       boundary: createProviderBoundary("v1", "cursor-acp"),
       boundaryMode: "v1",
