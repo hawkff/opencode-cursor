@@ -45,7 +45,7 @@ jobs:
       - run: bun install
       - run: bun run build
       - run: bun run test:ci:unit
-      - run: bun run test:ci:integration
+      # Integration tests skipped in publish - already validated on push to main
       - run: npm pack --dry-run
 
       - name: Publish to npm
