@@ -27,6 +27,9 @@ Add to `~/.config/opencode/opencode.json`:
     "cursor-acp": {
       "name": "Cursor ACP",
       "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "http://127.0.0.1:32124/v1"
+      },
       "models": {
         "cursor-acp/auto": { "name": "Auto" },
         "cursor-acp/composer-1.5": { "name": "Composer 1.5" },
