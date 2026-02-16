@@ -145,6 +145,61 @@ flowchart TB
 
 Default mode: `CURSOR_ACP_TOOL_LOOP_MODE=opencode`. Legacy `proxy-exec` still available. Details: [docs/architecture/runtime-tool-loop.md](docs/architecture/runtime-tool-loop.md).
 
+## Roadmap
+
+The current architecture works, but it's a translation layer held together with duct tape. cursor-agent doesn't speak OpenCode's tool protocol, so we flatten everything into text, intercept SSE streams, maintain ~50 tool name aliases, and fingerprint calls to guard against loops. It's complex because two systems weren't designed to talk to each other, and we're the interpreter in the middle.
+
+The goal is to move from text serialisation to structured protocols. cursor-agent supports MCP natively, and we already have the beginnings of ACP internally.
+
+### Phase 1 — Stabilise current architecture *(in progress)*
+
+- [x] Isolated plugin entry point (fix class constructor crash)
+- [x] MCP tool passthrough (unknown tools forwarded to cursor-agent, not dropped)
+- [x] Toast notifications for passed-through MCP tools
+- [x] Tool loop guard fix (stop inflating counts from stripped history)
+- [ ] Remove dead proxy-exec code (~500 LOC cleanup)
+- [ ] Fix pre-existing test isolation issue in integration suite
+- [ ] Activate dormant ACP modules (SessionManager, MetricsTracker) — wired and tested but not connected to plugin
+
+### Phase 2 — MCP server for OpenCode tools
+
+Build an MCP server that exposes OpenCode's tools (read, write, edit, bash, ls, etc.) as structured MCP tools. cursor-agent discovers and calls them directly via MCP protocol instead of us embedding tool definitions in text prompts.
+
+- [ ] Design MCP server tool surface (map OpenCode tools → MCP tool definitions)
+- [ ] Build MCP server process (stdio transport for local use)
+- [ ] Register via `.cursor/mcp.json` configuration
+- [ ] Integration tests: cursor-agent discovering and calling tools via MCP
+- [ ] Update installer to configure MCP server alongside plugin
+
+### Phase 3 — Simplify the plugin
+
+With tools flowing through MCP, the plugin's interception layer shrinks dramatically. No more text serialisation of tool definitions, no more SSE extraction of tool calls, no more alias mappings.
+
+- [ ] Remove prompt-builder tool serialisation (tools come via MCP now)
+- [ ] Remove tool name alias table (~50 mappings)
+- [ ] Simplify runtime interception (only conversation relay, not tool extraction)
+- [ ] Move loop guard to MCP layer (clean structured calls, not inferred from stream)
+- [ ] Keep text-mode fallback for users who can't configure MCP
+
+### Phase 4 — Full ACP + MCP
+
+Formalise the agent boundary. cursor-agent is an ACP provider with proper session management, metrics, and structured tool updates. MCP handles all tool communication.
+
+- [ ] ACP session lifecycle (SessionManager active, tracks conversations)
+- [ ] ACP metrics (MetricsTracker active, token/call/duration tracking)
+- [ ] ACP tool updates via ToolMapper feed into OpenCode's UI
+- [ ] End state: plugin is a thin ACP relay, tools flow through MCP, no text serialisation
+
+```
+End state:
+
+OpenCode ←→ [ACP relay plugin] ←→ cursor-agent
+                                       ↕
+                                  [MCP server]
+                                       ↕
+                               OpenCode tool runtime
+```
+
 ## Alternatives
 
 |                   |        open-cursor         | [yet-another-opencode-cursor-auth](https://github.com/Yukaii/yet-another-opencode-cursor-auth) | [opencode-cursor-auth](https://github.com/POSO-PocketSolutions/opencode-cursor-auth) | [cursor-opencode-auth](https://github.com/R44VC0RP/cursor-opencode-auth) |
